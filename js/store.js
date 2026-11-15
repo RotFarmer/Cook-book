@@ -9,6 +9,8 @@
 // one food-log document per month (log-YYYY-MM), and up to four recipe collections
 // imported from books (library-1 … library-4).
 
+import { recipeToMetric } from './metric.js';
+
 const NS = 'primal-cookbook:';
 const LIBRARY = ['library-1', 'library-2', 'library-3', 'library-4'];
 const FIXED = ['settings', 'weights', 'plan', 'habits', 'recipes', 'lists', ...LIBRARY];
@@ -110,6 +112,21 @@ export const store = {
     }
     await Promise.all(FIXED.map(k => this.ensure(k)));
     this._loadedAt = Date.now();
+    this.metricLibrary();
+  },
+
+  /**
+   * The book recipes were written in ounces and pounds; rewrite them once as grams and
+   * millilitres. Each collection is marked when done, so edits made afterwards are left alone.
+   */
+  metricLibrary() {
+    for (const key of LIBRARY) {
+      const doc = this.data[key];
+      if (!doc || doc.metric || !doc.items.length) continue;
+      for (const recipe of doc.items) recipeToMetric(recipe);
+      doc.metric = true;
+      this.save(key);
+    }
   },
 
   has(key) {
@@ -299,6 +316,7 @@ export const store = {
       this.save(key);
       n++;
     }
+    this.metricLibrary();
     return n;
   },
 };
