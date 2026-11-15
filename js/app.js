@@ -8,6 +8,7 @@ import * as plan from './views/plan.js';
 import * as food from './views/food.js';
 import * as habits from './views/habits.js';
 import * as weight from './views/weight.js';
+import * as lists from './views/lists.js';
 
 const TABS = [
   { id: 'recipes', label: 'Recipes', icon: 'book', view: recipes },
@@ -15,8 +16,59 @@ const TABS = [
   { id: 'food', label: 'Food', icon: 'egg', view: food },
   { id: 'habits', label: 'Habits', icon: 'sun', view: habits },
   { id: 'weight', label: 'Weight', icon: 'trend', view: weight },
+  { id: 'lists', label: 'Lists', icon: 'list', view: lists },
 ];
 const PREF = 'primal-cookbook-ui:tab';
+const PREF_PALETTE = 'primal-cookbook-ui:palette';
+
+// ---------- colour themes, and light/dark following the phone ----------
+
+// Each theme is a quiet tint with one soft accent; the swatch colour is that accent.
+const PALETTES = [
+  ['milk', 'Milk', '#F6C445'],
+  ['sage', 'Sage', '#B5CDB0'],
+  ['rose', 'Rose', '#E8B9B3'],
+  ['sky', 'Sky', '#AFC8E0'],
+  ['lavender', 'Lavender', '#C6B8E0'],
+  ['sand', 'Sand', '#DCC49E'],
+];
+const rootEl = document.documentElement;
+
+// The Android app's system bars sit outside the page, so tell it which colour to paint them.
+function syncChrome() {
+  if (!update.native || !update.native.setBackground) return;
+  requestAnimationFrame(() => {
+    const m = getComputedStyle(document.body).backgroundColor.match(/\d+/g);
+    if (m) update.native.setBackground('#' + m.slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join(''));
+  });
+}
+
+function applyPalette(id) {
+  const known = PALETTES.some(p => p[0] === id) ? id : 'milk';
+  if (known === 'milk') delete rootEl.dataset.palette;
+  else rootEl.dataset.palette = known;
+  try {
+    localStorage.setItem(PREF_PALETTE, known);
+  } catch { /* only used to avoid a flash of the default theme on the next start */ }
+  syncChrome();
+}
+
+// In a browser, light or dark comes from the system setting through CSS. Inside the Android
+// app the native side reports it, now and whenever the phone switches.
+function applyNativeTheme(mode) {
+  rootEl.dataset.theme = mode === 'dark' ? 'dark' : 'light';
+  syncChrome();
+}
+if (update.native && update.native.isNight) applyNativeTheme(update.native.isNight() ? 'dark' : 'light');
+window.addEventListener('apptheme', e => applyNativeTheme(e.detail));
+try {
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncChrome);
+} catch { /* older browsers */ }
+try {
+  applyPalette(localStorage.getItem(PREF_PALETTE));
+} catch {
+  applyPalette('milk');
+}
 
 const main = document.getElementById('view');
 const savebar = document.getElementById('savebar');
@@ -36,8 +88,10 @@ function show(id, { fromHash = false } = {}) {
   const changed = current !== id;
   current = id;
   for (const b of document.querySelectorAll('.tab')) {
-    if (b.dataset.tab === id) b.setAttribute('aria-current', 'page');
-    else b.removeAttribute('aria-current');
+    if (b.dataset.tab === id) {
+      b.setAttribute('aria-current', 'page');
+      b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // the tab bar scrolls sideways
+    } else b.removeAttribute('aria-current');
   }
   try {
     localStorage.setItem(PREF, id);
@@ -91,6 +145,7 @@ async function boot() {
     return;
   }
   ready = true;
+  applyPalette(store.data.settings.palette);
   show(current || initialTab());
 }
 
@@ -175,9 +230,28 @@ function openSettings() {
     }
   }
 
+  const swatches = h('div', { class: 'swatches', role: 'group', 'aria-label': 'Theme' });
+  function drawSwatches() {
+    const current = store.data.settings.palette || 'milk';
+    swatches.replaceChildren(...PALETTES.map(([id, label, color]) => h('button', {
+      class: 'swatch' + (id === current ? ' on' : ''), type: 'button', 'aria-pressed': String(id === current),
+      onclick: () => {
+        store.data.settings.palette = id;
+        store.save('settings');
+        applyPalette(id);
+        drawSwatches();
+      },
+    }, h('span', { class: 'swatch-dot', style: { background: color } }), label)));
+  }
+  drawSwatches();
+
   const s = sheet({
     title: 'Settings',
     content: [
+      h('section', { class: 'stack tight' },
+        h('h3', null, 'Theme'),
+        swatches,
+        h('p', { class: 'hint' }, 'Light and dark follow your phone\u2019s setting.')),
       h('section', { class: 'stack tight' },
         h('h3', null, 'Where your entries are kept'),
         h('p', null, store.mode === 'cloud'
@@ -185,7 +259,7 @@ function openSettings() {
           : 'In this browser, on this device only. Clearing the browser’s site data removes them, so keep a backup.')),
       h('section', { class: 'stack tight' },
         h('h3', null, 'Backup'),
-        h('p', { class: 'quiet' }, 'A backup is one block of text holding everything: weight, plan, habits, food log and recipes. Restoring replaces only the sections the backup contains.'),
+        h('p', { class: 'quiet' }, 'A backup is one block of text holding everything except photos: weight, plan, habits, lists, food log and recipes. Restoring replaces only the sections the backup contains.'),
         h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', onclick: copyBackup }, icon('copy', 18), 'Copy backup')),
         out,
         inp,

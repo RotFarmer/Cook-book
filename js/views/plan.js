@@ -1,120 +1,123 @@
-// Meal plan: what you intend to eat on each day of the week.
+// Meal plan: a few blocks of your own text, one per meal. Tick a block when you have eaten it.
+// The ticks start fresh every day; the text stays until you edit it.
 
 import { store } from '../store.js';
-import { h, icon, sheet, field, empty, confirmBtn, fmtTime, today, weekdayIndex, uid, toast } from '../util.js';
-import { allRecipes, findRecipe, openRecipe } from './recipes.js';
+import { h, icon, sheet, field, empty, confirmBtn, today, monthDay, fmtTime, uid } from '../util.js';
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-let day = weekdayIndex(today());
+// An earlier version planned each weekday separately. Carry the fullest day over as blocks.
+function migrate(plan) {
+  if (!plan.days) return;
+  const fullest = Object.values(plan.days).sort((a, b) => b.length - a.length)[0] || [];
+  if (!plan.blocks.length && fullest.length) {
+    plan.blocks = fullest
+      .slice().sort((a, b) => (a.time || '99').localeCompare(b.time || '99'))
+      .map(it => ({ id: uid(), title: [it.time && fmtTime(it.time), it.title].filter(Boolean).join(' · '), text: it.note || '' }));
+  }
+  delete plan.days;
+  store.save('plan');
+}
 
-const itemsFor = d => store.data.plan.days[d] || [];
-const byTime = (a, b) => (a.time || '99').localeCompare(b.time || '99');
+// Today's ticks; anything ticked on an earlier day no longer counts.
+function ticks(plan) {
+  if (!plan.checked || plan.checked.date !== today()) plan.checked = { date: today(), ids: [] };
+  return plan.checked.ids;
+}
 
 export function render(root, ctx) {
-  const todayIdx = weekdayIndex(today());
-  const items = itemsFor(day).slice().sort(byTime);
+  const plan = store.data.plan;
+  migrate(plan);
+  const blocks = plan.blocks;
+  const done = ticks(plan);
 
-  root.append(
-    h('div', { class: 'view-head' },
-      h('h1', null, 'Meal plan'),
-      h('button', { class: 'btn primary small', type: 'button', onclick: () => edit(null, ctx) }, icon('plus', 18), 'Add meal')),
-    h('div', { class: 'week', role: 'group', 'aria-label': 'Day of the week' }, DAYS.map((name, i) =>
-      h('button', {
-        class: 'weekday' + (i === day ? ' on' : '') + (i === todayIdx ? ' today' : ''),
-        type: 'button', 'aria-pressed': String(i === day),
-        'aria-label': name + (i === todayIdx ? ' (today)' : '') + `, ${itemsFor(i).length} planned`,
-        onclick: () => { day = i; ctx.refresh(); },
-      },
-        h('span', { class: 'weekday-name' }, name.slice(0, 3)),
-        h('span', { class: 'dot' + (itemsFor(i).length ? ' full' : '') })))));
+  root.append(h('div', { class: 'view-head' },
+    h('h1', null, 'Meal plan'),
+    h('button', { class: 'btn primary small', type: 'button', onclick: () => edit(null, ctx) }, icon('plus', 18), 'Add block')));
 
-  if (!items.length) {
-    root.append(empty(`Nothing planned for ${DAYS[day]}`, 'Add the meals you want to eat, with a time if you like.'));
+  if (!blocks.length) {
+    root.append(empty('No meal plan yet',
+      'Add a block for each meal and write what you plan to eat. Tick the blocks off through the day; they clear again tomorrow.'));
     return;
   }
 
-  root.append(
-    h('div', { class: 'list' }, items.map(it => {
-      const recipe = it.recipeId && findRecipe(it.recipeId);
-      return h('button', { class: 'row', type: 'button', onclick: () => edit(it, ctx) },
-        h('span', { class: 'row-time' }, it.time ? fmtTime(it.time) : '—'),
-        h('span', { class: 'row-main' },
-          h('span', null, it.title),
-          it.note && h('span', { class: 'row-note pre' }, it.note),
-          recipe && h('span', { class: 'row-note' }, `Recipe: ${recipe.title}`)));
-    })),
-    h('button', { class: 'btn quiet-btn', type: 'button', onclick: () => copyDay(ctx) }, icon('copy', 18), `Copy ${DAYS[day]} to other days`));
+  const summary = h('p', { class: 'quiet', 'aria-live': 'polite' });
+  const drawSummary = () => {
+    const n = blocks.filter(b => done.includes(b.id)).length;
+    summary.textContent = `Today, ${monthDay(today())} · ${n === blocks.length ? 'all done' : `${n} of ${blocks.length} done`}`;
+  };
+
+  root.append(summary, ...blocks.map((b, i) => {
+    const on = done.includes(b.id);
+    const name = b.title || `Meal ${i + 1}`;
+    const card = h('section', { class: 'block' + (on ? ' on' : '') });
+    const tick = h('button', {
+      class: 'block-tick', type: 'button', role: 'checkbox', 'aria-checked': String(on), 'aria-label': `${name} eaten`,
+      onclick: () => {
+        const ids = ticks(plan);
+        const at = ids.indexOf(b.id);
+        if (at >= 0) ids.splice(at, 1);
+        else ids.push(b.id);
+        store.save('plan');
+        card.classList.toggle('on', at < 0);
+        tick.setAttribute('aria-checked', String(at < 0));
+        drawSummary();
+      },
+    }, h('span', { class: 'egg' }));
+    card.append(
+      h('div', { class: 'block-head' },
+        tick,
+        h('h2', null, name),
+        h('button', { class: 'icon-btn', type: 'button', 'aria-label': `Edit ${name}`, onclick: () => edit(b, ctx) }, icon('pencil', 20))),
+      b.text
+        ? h('p', { class: 'block-text pre' }, b.text)
+        : h('p', { class: 'block-text quiet' }, 'Nothing written yet. Tap the pencil to add your plan.'));
+    return card;
+  }));
+  drawSummary();
 }
 
-function edit(item, ctx) {
-  const recipes = allRecipes();
-  const time = h('input', { type: 'time', id: 'plan-time', value: item ? item.time || '' : '' });
-  const title = h('input', { type: 'text', id: 'plan-title', maxlength: '120', placeholder: 'e.g. Raw milk with honey', value: item ? item.title : '' });
-  const note = h('textarea', { id: 'plan-note', rows: '3', placeholder: 'Amounts, reminders…', value: item ? item.note || '' : '' });
-  const recipe = recipes.length > 0 && h('select', { id: 'plan-recipe', value: item && findRecipe(item.recipeId) ? item.recipeId : '' },
-    h('option', { value: '' }, 'None'),
-    recipes.slice().sort((a, b) => a.title.localeCompare(b.title)).map(r => h('option', { value: r.id }, r.title)));
-  const error = h('p', { class: 'error', role: 'alert', hidden: true }, 'Say what the meal is.');
+function edit(block, ctx) {
+  const plan = store.data.plan;
+  const title = h('input', { type: 'text', id: 'block-title', maxlength: '80', placeholder: 'e.g. Breakfast', value: block ? block.title || '' : '' });
+  const text = h('textarea', { id: 'block-text', rows: '12', placeholder: 'What you plan to eat, amounts, reminders…', value: block ? block.text || '' : '' });
 
   function save() {
-    const t = title.value.trim();
-    if (!t) {
-      error.hidden = false;
-      title.focus();
-      return;
-    }
-    const fields = { time: time.value, title: t, note: note.value.trim(), recipeId: recipe ? recipe.value : (item && item.recipeId) || '' };
-    if (item) Object.assign(item, fields);
-    else (store.data.plan.days[day] ||= []).push({ id: uid(), ...fields });
+    const fields = { title: title.value.trim(), text: text.value.replace(/\s+$/, '') };
+    if (block) Object.assign(block, fields);
+    else plan.blocks.push({ id: uid(), ...fields });
     store.save('plan');
     s.close();
-    ctx.refresh();
   }
-
   function remove() {
-    store.data.plan.days[day] = itemsFor(day).filter(x => x !== item);
+    plan.blocks = plan.blocks.filter(b => b !== block);
     store.save('plan');
     s.close();
-    ctx.refresh();
   }
+  function move(by) {
+    const i = plan.blocks.indexOf(block);
+    const j = i + by;
+    if (j < 0 || j >= plan.blocks.length) return;
+    [plan.blocks[i], plan.blocks[j]] = [plan.blocks[j], plan.blocks[i]];
+    store.save('plan');
+    drawMoves();
+  }
+  const moves = h('div', { class: 'btn-row' });
+  function drawMoves() {
+    const i = plan.blocks.indexOf(block);
+    moves.replaceChildren(
+      h('button', { class: 'btn small', type: 'button', disabled: i === 0, onclick: () => move(-1) }, icon('up', 18), 'Move up'),
+      h('button', { class: 'btn small', type: 'button', disabled: i === plan.blocks.length - 1, onclick: () => move(1) }, icon('down', 18), 'Move down'));
+  }
+  if (block) drawMoves();
 
-  const linked = item && findRecipe(item.recipeId);
   const s = sheet({
-    title: item ? `Edit ${DAYS[day]} meal` : `Add to ${DAYS[day]}`,
+    title: block ? 'Edit block' : 'Add block',
     content: [
-      field('Meal', title), error,
-      field('Time', time, 'Leave empty if the time does not matter.'),
-      field('Details', note),
-      recipe && field('Recipe', recipe),
-      linked && h('button', { class: 'btn', type: 'button', onclick: () => openRecipe(linked.id, ctx) }, icon('book', 18), 'Open recipe'),
+      field('Name', title, 'Optional.'),
+      field('Plan', text),
+      block && plan.blocks.length > 1 && moves,
     ],
-    footer: [item && confirmBtn('Delete', 'Tap again to delete', remove), h('span', { class: 'grow' }),
+    footer: [block && confirmBtn('Delete', 'Tap again to delete', remove), h('span', { class: 'grow' }),
       h('button', { class: 'btn primary', type: 'button', onclick: save }, 'Save')],
-  });
-}
-
-function copyDay(ctx) {
-  const boxes = DAYS.map((name, i) => i !== day && h('label', { class: 'check' },
-    h('input', { type: 'checkbox', id: `copy-day-${i}`, value: String(i), checked: true }), name)).filter(Boolean);
-
-  function copy() {
-    const targets = boxes.map(b => b.firstChild).filter(c => c.checked).map(c => c.value);
-    if (!targets.length) return;
-    for (const t of targets) {
-      store.data.plan.days[t] = itemsFor(day).map(it => ({ ...it, id: uid() }));
-    }
-    store.save('plan');
-    s.close();
-    ctx.refresh();
-    toast(`Copied to ${targets.length} ${targets.length === 1 ? 'day' : 'days'}`);
-  }
-
-  const s = sheet({
-    title: `Copy ${DAYS[day]}`,
-    content: [
-      h('p', { class: 'quiet' }, `${DAYS[day]}'s meals replace whatever is planned on the days you pick.`),
-      h('div', { class: 'checks' }, boxes),
-    ],
-    footer: [h('span', { class: 'grow' }), h('button', { class: 'btn primary', type: 'button', onclick: copy }, 'Copy')],
+    onclose: ctx.refresh,
   });
 }

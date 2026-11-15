@@ -11,18 +11,20 @@
 
 const NS = 'primal-cookbook:';
 const LIBRARY = ['library-1', 'library-2', 'library-3', 'library-4'];
-const FIXED = ['settings', 'weights', 'plan', 'habits', 'recipes', ...LIBRARY];
+const FIXED = ['settings', 'weights', 'plan', 'habits', 'recipes', 'lists', ...LIBRARY];
 const LOG_KEY = /^log-\d{4}-\d{2}$/;
 
 const DEFAULTS = {
-  settings: () => ({ unit: 'lb', customFoods: [] }),
+  settings: () => ({ unit: 'lb', customFoods: [], palette: 'milk' }),
   weights: () => ({ entries: [] }), // [{date: 'YYYY-MM-DD', kg: number}]
-  plan: () => ({ days: {} }), // {'0'…'6' (Mon…Sun): [{id, time, title, note, recipeId}]}
+  // Meal blocks keep their text; the ticks belong to one day and start fresh on the next.
+  plan: () => ({ blocks: [], checked: { date: '', ids: [] } }), // blocks: [{id, title, text}]
   habits: () => ({
-    list: [{ id: 'sunlight', name: 'Get sunlight' }, { id: 'walk', name: 'Walk' }],
+    list: [{ id: 'sunlight', name: 'Get sunlight', emoji: '☀️' }, { id: 'walk', name: 'Walk', emoji: '🚶' }],
     done: {}, // {'YYYY-MM-DD': [habitId]}
   }),
   recipes: () => ({ mine: [], saved: [] }),
+  lists: () => ({ todo: [], buy: [] }), // [{id, text, done}]
 };
 
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -54,6 +56,22 @@ function lsSet(key, value) {
   }
 }
 
+// The browser database that holds photos when entries stay on this device.
+function idb(mode, run) {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open('primal-cookbook', 1);
+    open.onupgradeneeded = () => open.result.createObjectStore('photos');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const tx = open.result.transaction('photos', mode);
+      const req = run(tx.objectStore('photos'));
+      tx.oncomplete = () => resolve(req.result);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    };
+  });
+}
+
 export const store = {
   mode: 'local',
   failing: false, // true while changes are not reaching storage
@@ -66,6 +84,7 @@ export const store = {
   _carry: new Set(),
   _subs: new Set(),
   _loadedAt: 0,
+  _photos: new Map(),
 
   onstatus(fn) {
     this._subs.add(fn);
@@ -101,8 +120,51 @@ export const store = {
   libraryRecipes() {
     return LIBRARY.flatMap(key => {
       const doc = this.data[key];
-      return doc ? doc.items.map(r => ({ ...r, source: doc.source })) : [];
+      return doc ? doc.items.map(r => ({ ...r, source: r.source || doc.source, _key: key })) : [];
     });
+  },
+
+  /** Where a book recipe is kept, so it can be edited or deleted: {key, items, index}. */
+  findLibraryRecipe(id) {
+    for (const key of LIBRARY) {
+      const doc = this.data[key];
+      const index = doc ? doc.items.findIndex(r => r.id === id) : -1;
+      if (index >= 0) return { key, items: doc.items, index };
+    }
+    return null;
+  },
+
+  // ---------- photos ----------
+  // Kept apart from the other documents because they are big: one cloud document per photo,
+  // or the browser's IndexedDB when entries stay on the device. Not part of backups.
+
+  async photoPut(id, dataUrl) {
+    if (this.mode === 'cloud') await within(this._col.doc('photo-' + id).set({ data: dataUrl }), 20000);
+    else await idb('readwrite', s => s.put(dataUrl, id));
+    this._photos.set(id, dataUrl);
+  },
+
+  async photoGet(id) {
+    if (this._photos.has(id)) return this._photos.get(id);
+    let url = null;
+    if (this.mode === 'cloud') {
+      const snap = await within(this._col.doc('photo-' + id).get(), 20000);
+      url = snap.exists ? snap.data().data : null;
+    } else {
+      url = (await idb('readonly', s => s.get(id))) || null;
+    }
+    if (url) this._photos.set(id, url);
+    return url;
+  },
+
+  async photoDelete(id) {
+    this._photos.delete(id);
+    try {
+      if (this.mode === 'cloud') await within(this._col.doc('photo-' + id).delete(), 20000);
+      else await idb('readwrite', s => s.delete(id));
+    } catch {
+      // an orphaned photo is harmless
+    }
   },
 
   /** Load a document if it is not in memory yet. Rejects if the cloud cannot be reached. */
@@ -210,7 +272,7 @@ export const store = {
     const out = {};
     if (this.mode === 'cloud') {
       const all = await within(this._col.get(), 15000);
-      for (const d of all.docs) out[d.id] = clone(d.data());
+      for (const d of all.docs) if (!d.id.startsWith('photo-')) out[d.id] = clone(d.data());
     } else {
       try {
         for (let i = 0; i < localStorage.length; i++) {

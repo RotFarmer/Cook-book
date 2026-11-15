@@ -63,7 +63,8 @@ export function render(root, ctx) {
         row.setAttribute('aria-checked', String(i < 0));
         drawSummary();
       },
-    }, h('span', { class: 'egg' }), h('span', { class: 'row-main' }, habit.name));
+    }, h('span', { class: 'egg' }), habit.emoji && h('span', { class: 'emoji', 'aria-hidden': 'true' }, habit.emoji),
+      h('span', { class: 'row-main' }, habit.name));
     return row;
   });
 
@@ -74,6 +75,7 @@ export function render(root, ctx) {
 function editHabits(ctx) {
   const data = store.data.habits;
   const listEl = h('div', { class: 'stack tight' });
+  const emojiIn = h('input', { type: 'text', class: 'emoji-in', id: 'habit-new-emoji', maxlength: '8', placeholder: '🙂', 'aria-label': 'Emoji for the new habit' });
   const nameIn = h('input', { type: 'text', id: 'habit-new', maxlength: '60', placeholder: 'New habit', 'aria-label': 'New habit' });
 
   function move(i, by) {
@@ -86,6 +88,14 @@ function editHabits(ctx) {
 
   function draw() {
     listEl.replaceChildren(...data.list.map((habit, i) => h('div', { class: 'edit-row' },
+      h('input', {
+        type: 'text', class: 'emoji-in', id: `habit-emoji-${habit.id}`, maxlength: '8', placeholder: '🙂',
+        'aria-label': `Emoji for ${habit.name}`, value: habit.emoji || '',
+        onchange: e => {
+          habit.emoji = e.target.value.trim();
+          store.save('habits');
+        },
+      }),
       h('input', {
         type: 'text', id: `habit-${habit.id}`, maxlength: '60', 'aria-label': 'Habit name', value: habit.name,
         onchange: e => {
@@ -109,9 +119,10 @@ function editHabits(ctx) {
     e.preventDefault();
     const v = nameIn.value.trim();
     if (!v) return;
-    data.list.push({ id: uid(), name: v });
+    data.list.push({ id: uid(), name: v, emoji: emojiIn.value.trim() });
     store.save('habits');
     nameIn.value = '';
+    emojiIn.value = '';
     draw();
     nameIn.focus();
   }
@@ -120,8 +131,9 @@ function editHabits(ctx) {
   sheet({
     title: 'Edit habits',
     content: [
+      h('p', { class: 'quiet' }, 'The small box in front of each habit is for an emoji of your choice.'),
       listEl,
-      h('form', { class: 'add-row', onsubmit: addHabit }, nameIn, h('button', { class: 'btn primary', type: 'submit' }, 'Add')),
+      h('form', { class: 'add-row', onsubmit: addHabit }, emojiIn, nameIn, h('button', { class: 'btn primary', type: 'submit' }, 'Add')),
     ],
     onclose: ctx.refresh,
   });

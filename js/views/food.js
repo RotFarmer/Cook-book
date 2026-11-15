@@ -1,4 +1,4 @@
-// Food log: what you ate and when. No calories, no macros.
+// Food log: what you ate and when, with grams if you want them. No calories, no macros.
 
 import { store } from '../store.js';
 import { h, icon, sheet, field, dateNav, empty, confirmBtn, today, nowTime, fmtTime, dayName, uid } from '../util.js';
@@ -41,9 +41,12 @@ export function render(root, ctx) {
     h('button', { class: 'row', type: 'button', onclick: () => edit(e, ctx) },
       h('span', { class: 'row-time' }, fmtTime(e.time)),
       h('span', { class: 'row-main' },
-        h('span', null, e.foods.join(' · ')),
+        h('span', null, e.foods.map(f => withGrams(e, f)).join(' · ')),
         e.note && h('span', { class: 'row-note' }, e.note))))));
 }
+
+// "Raw milk 250 g" when grams were logged for that food, otherwise just the name.
+const withGrams = (entry, food) => (entry.grams && entry.grams[food] ? `${food} ${entry.grams[food]} g` : food);
 
 // Most-logged foods in the months that are open, for quick picking.
 function recentFoods() {
@@ -61,8 +64,8 @@ function edit(entry, ctx) {
   const key = keyFor(date);
   const settings = store.data.settings;
   const draft = entry
-    ? { time: entry.time, foods: [...entry.foods], note: entry.note || '' }
-    : { time: date === today() ? nowTime() : '12:00', foods: [], note: '' };
+    ? { time: entry.time, foods: [...entry.foods], note: entry.note || '', grams: { ...(entry.grams || {}) } }
+    : { time: date === today() ? nowTime() : '12:00', foods: [], note: '', grams: {} };
   let q = '';
 
   const timeIn = h('input', { type: 'time', id: 'food-time', value: draft.time });
@@ -71,7 +74,7 @@ function edit(entry, ctx) {
     type: 'search', id: 'food-search', placeholder: 'Search foods', autocomplete: 'off', 'aria-label': 'Search foods',
     oninput: e => { q = e.target.value.trim(); drawPicker(); },
   });
-  const selectedEl = h('div', { class: 'chips' });
+  const selectedEl = h('div', { class: 'stack tight' });
   const pickerEl = h('div', { class: 'picker' });
   const saveBtn = h('button', { class: 'btn primary', type: 'button', onclick: save }, 'Save');
 
@@ -84,9 +87,21 @@ function edit(entry, ctx) {
   }
 
   function drawSelected() {
+    // One line per chosen food: its name, an optional weight, and a way to take it off again.
     selectedEl.replaceChildren(...(draft.foods.length
-      ? draft.foods.map(f => h('button', { class: 'chip on', type: 'button', 'aria-label': `Remove ${f}`, onclick: () => toggle(f) }, f, icon('x', 14)))
-      : [h('span', { class: 'quiet' }, 'Tap foods below to add them.')]));
+      ? draft.foods.map((f, i) => h('div', { class: 'sel-row' },
+        h('span', { class: 'sel-name' }, f),
+        h('input', {
+          type: 'number', class: 'grams', id: `food-grams-${i}`, inputmode: 'numeric', min: '0', max: '9999', step: '1',
+          placeholder: 'g', 'aria-label': `Grams of ${f} (optional)`, value: draft.grams[f] || '',
+          oninput: e => {
+            const g = Math.round(parseFloat(e.target.value));
+            if (g > 0) draft.grams[f] = g;
+            else delete draft.grams[f];
+          },
+        }),
+        h('button', { class: 'icon-btn', type: 'button', 'aria-label': `Remove ${f}`, onclick: () => toggle(f) }, icon('x', 18))))
+      : [h('span', { class: 'quiet' }, 'Tap foods below to add them. Grams are optional.')]));
     saveBtn.disabled = !draft.foods.length;
   }
 
@@ -134,8 +149,10 @@ function edit(entry, ctx) {
     const doc = store.data[key];
     const time = timeIn.value || draft.time;
     const note = noteIn.value.trim();
-    if (entry) Object.assign(entry, { time, foods: draft.foods, note });
-    else (doc.days[date] ||= []).push({ id: uid(), time, foods: draft.foods, note });
+    const grams = {};
+    for (const f of draft.foods) if (draft.grams[f] > 0) grams[f] = draft.grams[f];
+    if (entry) Object.assign(entry, { time, foods: draft.foods, note, grams });
+    else (doc.days[date] ||= []).push({ id: uid(), time, foods: draft.foods, note, grams });
     store.save(key);
     s.close();
     ctx.refresh();

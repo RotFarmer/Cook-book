@@ -1,17 +1,31 @@
-// Recipes: the built-in collection plus the ones you add, grouped by category.
+// Recipes: the collection that ships with the app plus the ones you add. Every recipe can be
+// edited or deleted, and can carry photos.
 
 import { store } from '../store.js';
-import { h, icon, sheet, field, empty, confirmBtn, uid, toast } from '../util.js';
+import { h, icon, sheet, field, empty, confirmBtn, uid, toast, fileToPhoto } from '../util.js';
 import { unlock, packCount } from '../unlock.js';
 import { RECIPES } from '../data/recipes.js';
 
 let q = '';
 let cat = 'all';
+const MAX_PHOTOS = 4;
 
-// Built-in recipes, recipes imported from books, then your own.
-export const allRecipes = () => [...RECIPES, ...store.libraryRecipes(), ...store.data.recipes.mine];
+// Built-in recipes, the book collection, then your own. Items are copies tagged with where
+// they are kept (_key); use locate() to reach the stored recipe itself.
+export const allRecipes = () => [
+  ...RECIPES,
+  ...store.libraryRecipes(),
+  ...store.data.recipes.mine.map(r => ({ ...r, _key: 'recipes' })),
+];
 export const findRecipe = id => allRecipes().find(r => r.id === id);
-const isMine = r => store.data.recipes.mine.includes(r);
+
+function locate(id) {
+  const mine = store.data.recipes.mine;
+  const index = mine.findIndex(r => r.id === id);
+  if (index >= 0) return { key: 'recipes', items: mine, index };
+  return store.findLibraryRecipe(id);
+}
+
 const isSaved = r => store.data.recipes.saved.includes(r.id);
 const lines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
 
@@ -47,6 +61,8 @@ function unlockCard(ctx) {
       msg.hidden = true;
       try {
         store.importAll(await unlock(input.value));
+        store.data.settings.unlocked = true;
+        store.save('settings');
         toast(`${packCount} recipes unlocked`);
         ctx.refresh();
       } catch {
@@ -64,7 +80,7 @@ function unlockCard(ctx) {
 }
 
 export function render(root, ctx) {
-  const locked = packCount > 0 && !store.libraryRecipes().length;
+  const locked = packCount > 0 && !store.data.settings.unlocked && !store.libraryRecipes().length;
   const chipsEl = h('div', { class: 'chips scroll' });
   const listEl = h('div', { class: 'stack' });
   const searchIn = h('input', {
@@ -77,7 +93,7 @@ export function render(root, ctx) {
     h('div', { class: 'view-head' },
       h('h1', null, 'Recipes'),
       h('button', { class: 'btn primary small', type: 'button', onclick: () => editRecipe(null, ctx) }, icon('plus', 18), 'Add recipe')),
-    locked && unlockCard(ctx),
+    ...(locked ? [unlockCard(ctx)] : []), // plain DOM append would print a bare `false`
     searchIn, chipsEl, listEl);
 
   function draw() {
@@ -109,12 +125,13 @@ export function render(root, ctx) {
       return;
     }
 
-    const row = (r, showCat) => h('button', { class: 'row', type: 'button', onclick: () => openRecipe(r.id, ctx) },
-      h('span', { class: 'row-main' },
-        h('span', null, r.title),
-        (showCat || isMine(r)) && h('span', { class: 'row-note' },
-          [showCat && r.category, isMine(r) && 'My recipe'].filter(Boolean).join(' · '))),
-      isSaved(r) && h('span', { class: 'row-mark', 'aria-label': 'Saved' }, icon('heart', 18)));
+    const row = (r, showCat) => {
+      const sub = [showCat && r.category, r._key === 'recipes' && 'My recipe'].filter(Boolean).join(' · ');
+      return h('button', { class: 'row', type: 'button', onclick: () => openRecipe(r.id, ctx) },
+        h('span', { class: 'row-main' }, h('span', null, r.title), sub && h('span', { class: 'row-note' }, sub)),
+        r.photos && r.photos.length > 0 && h('span', { class: 'row-mark quiet-mark', 'aria-label': 'Has photos' }, icon('image', 18)),
+        isSaved(r) && h('span', { class: 'row-mark', 'aria-label': 'Saved' }, icon('heart', 18)));
+    };
 
     const sorted = list => list.slice().sort((a, b) => a.title.localeCompare(b.title));
     if (cat === 'all' && !ql) {
@@ -129,6 +146,15 @@ export function render(root, ctx) {
     }
   }
   draw();
+}
+
+// A photo that fills itself in once it has been fetched from storage.
+function photoEl(id, cls) {
+  const box = h('div', { class: cls });
+  store.photoGet(id).then(
+    url => { if (url) box.append(h('img', { src: url, alt: 'Recipe photo' })); else box.classList.add('missing'); },
+    () => box.classList.add('missing'));
+  return box;
 }
 
 export function openRecipe(id, ctx) {
@@ -151,12 +177,32 @@ export function openRecipe(id, ctx) {
   }
   drawHeart();
 
-  const meta = [r.category, r.source && (r.page ? `${r.source}, PDF page ${r.page}` : r.source), isMine(r) && 'My recipe']
+  function remove() {
+    const loc = locate(r.id);
+    if (!loc) return;
+    loc.items.splice(loc.index, 1);
+    store.save(loc.key);
+    const d = store.data.recipes;
+    d.saved = d.saved.filter(x => x !== r.id);
+    store.save('recipes');
+    if (loc.key !== 'recipes') {
+      store.data.settings.unlocked = true; // an emptied collection should not ask for the code again
+      store.save('settings');
+    }
+    for (const p of r.photos || []) store.photoDelete(p);
+    s.close();
+    toast('Recipe deleted');
+  }
+
+  const editable = !!r._key;
+  const photos = r.photos || [];
+  const meta = [r.category, r.source && (r.page ? `${r.source}, PDF page ${r.page}` : r.source), r._key === 'recipes' && 'My recipe']
     .filter(Boolean).join(' · ');
   const method = r.method || [];
   const s = sheet({
     title: r.title,
     content: [
+      photos.length > 0 && h('div', { class: 'photos' + (photos.length === 1 ? ' single' : '') }, photos.map(p => photoEl(p, 'photo'))),
       meta && h('p', { class: 'quiet' }, meta),
       r.yield && h('p', null, r.yield),
       r.ingredients && r.ingredients.length > 0 && h('section', { class: 'recipe-part' },
@@ -168,14 +214,8 @@ export function openRecipe(id, ctx) {
       r.notes && h('section', { class: 'recipe-part' }, h('h3', null, 'Notes'), h('p', { class: 'pre' }, r.notes)),
     ],
     footer: [
-      isMine(r) && confirmBtn('Delete', 'Tap again to delete', () => {
-        const d = store.data.recipes;
-        d.mine = d.mine.filter(x => x !== r);
-        d.saved = d.saved.filter(x => x !== r.id);
-        store.save('recipes');
-        s.close();
-      }),
-      isMine(r) && h('button', { class: 'btn', type: 'button', onclick: () => { s.close(); editRecipe(r, ctx); } }, 'Edit'),
+      editable && confirmBtn('Delete', 'Tap again to delete', remove),
+      editable && h('button', { class: 'btn', type: 'button', onclick: () => { s.close(); editRecipe(r, ctx); } }, 'Edit'),
       h('span', { class: 'grow' }),
       heart,
     ],
@@ -185,17 +225,69 @@ export function openRecipe(id, ctx) {
 
 function editRecipe(r, ctx) {
   const title = h('input', { type: 'text', id: 'recipe-title', maxlength: '120', value: r ? r.title : '' });
-  const category = h('input', { type: 'text', id: 'recipe-category', maxlength: '60', list: 'recipe-cats', placeholder: 'e.g. Meat dishes', value: r ? r.category || '' : '' });
-  const ingredients = h('textarea', { id: 'recipe-ingredients', rows: '5', placeholder: 'One per line', value: r ? (r.ingredients || []).join('\n') : '' });
-  const method = h('textarea', { id: 'recipe-method', rows: '5', placeholder: 'One step per line', value: r ? (r.method || []).join('\n') : '' });
+  const category = h('input', { type: 'text', id: 'recipe-category', maxlength: '60', list: 'recipe-cats', placeholder: 'e.g. Red meat', value: r ? r.category || '' : '' });
+  const ingredients = h('textarea', { id: 'recipe-ingredients', rows: '6', placeholder: 'One per line', value: r ? (r.ingredients || []).join('\n') : '' });
+  const method = h('textarea', { id: 'recipe-method', rows: '6', placeholder: 'One step per line', value: r ? (r.method || []).join('\n') : '' });
   const notes = h('textarea', { id: 'recipe-notes', rows: '3', value: r ? r.notes || '' : '' });
   const error = h('p', { class: 'error', role: 'alert', hidden: true }, 'Give the recipe a name.');
+  const saveBtn = h('button', { class: 'btn primary', type: 'button', onclick: save }, 'Save');
 
-  function save() {
+  // Photos: {id, url} for ones already stored, {url} for ones picked just now.
+  const photos = (r && r.photos ? r.photos : []).map(id => ({ id }));
+  const removed = [];
+  const photoMsg = h('p', { class: 'hint', role: 'status' });
+  const thumbs = h('div', { class: 'thumbs' });
+  const fileIn = h('input', {
+    type: 'file', id: 'recipe-photo', accept: 'image/*', hidden: true,
+    onchange: async e => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      photoMsg.textContent = 'Preparing the photo…';
+      try {
+        photos.push({ url: await fileToPhoto(file) });
+        photoMsg.textContent = '';
+      } catch {
+        photoMsg.textContent = 'That file is not a photo this app can read.';
+      }
+      drawPhotos();
+    },
+  });
+  function drawPhotos() {
+    thumbs.replaceChildren(
+      ...photos.map((p, i) => {
+        const box = p.id ? photoEl(p.id, 'thumb') : h('div', { class: 'thumb' }, h('img', { src: p.url, alt: 'New photo' }));
+        box.append(h('button', {
+          class: 'thumb-x', type: 'button', 'aria-label': 'Remove photo',
+          onclick: () => { if (p.id) removed.push(p.id); photos.splice(i, 1); drawPhotos(); },
+        }, icon('x', 14)));
+        return box;
+      }),
+      photos.length < MAX_PHOTOS && h('button', { class: 'thumb add', type: 'button', onclick: () => fileIn.click() },
+        icon('image', 22), h('span', null, 'Add photo')));
+  }
+
+  async function save() {
     const t = title.value.trim();
     if (!t) {
       error.hidden = false;
       title.focus();
+      return;
+    }
+    saveBtn.disabled = true;
+    const ids = [];
+    try {
+      for (const p of photos) {
+        if (!p.id) {
+          p.id = uid();
+          await store.photoPut(p.id, p.url);
+        }
+        ids.push(p.id);
+      }
+    } catch {
+      photoMsg.textContent = 'A photo could not be saved. Check your connection or free up space, then try again.';
+      for (const p of photos) if (!ids.includes(p.id)) delete p.id;
+      saveBtn.disabled = false;
       return;
     }
     const fields = {
@@ -204,24 +296,33 @@ function editRecipe(r, ctx) {
       ingredients: lines(ingredients.value),
       method: lines(method.value),
       notes: notes.value.trim(),
+      photos: ids,
     };
-    if (r) Object.assign(r, fields);
-    else store.data.recipes.mine.push({ id: 'my-' + uid(), ...fields });
-    store.save('recipes');
+    const loc = r && locate(r.id);
+    if (loc) {
+      Object.assign(loc.items[loc.index], fields);
+      store.save(loc.key);
+    } else {
+      store.data.recipes.mine.push({ id: 'my-' + uid(), ...fields });
+      store.save('recipes');
+    }
+    for (const id of removed) store.photoDelete(id);
     s.close();
   }
 
+  drawPhotos();
   const s = sheet({
     title: r ? 'Edit recipe' : 'Add recipe',
     content: [
       field('Name', title), error,
       field('Category', category),
       h('datalist', { id: 'recipe-cats' }, categories().map(c => h('option', { value: c }))),
+      h('div', { class: 'field' }, h('span', { class: 'label' }, 'Photos'), thumbs, fileIn, photoMsg),
       field('Ingredients', ingredients),
       field('Method', method),
       field('Notes', notes),
     ],
-    footer: [h('span', { class: 'grow' }), h('button', { class: 'btn primary', type: 'button', onclick: save }, 'Save')],
+    footer: [h('span', { class: 'grow' }), saveBtn],
     onclose: ctx.refresh,
   });
 }

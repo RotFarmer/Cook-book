@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -51,6 +52,7 @@ public class MainActivity extends Activity {
     private static final String RELEASE_PREFIX = "https://github.com/RotFarmer/Cook-book/releases/download/";
     private static final int REQ_FILE = 1;
 
+    private FrameLayout root;
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
     private volatile boolean downloading;
@@ -62,7 +64,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         root.setBackgroundColor(getColor(R.color.bg));
         web = new WebView(this);
         web.setBackgroundColor(getColor(R.color.bg));
@@ -73,11 +75,7 @@ public class MainActivity extends Activity {
 
         // Draw behind the system bars and keep the page clear of them (and of the keyboard).
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
-                == Configuration.UI_MODE_NIGHT_YES;
-        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), root);
-        bars.setAppearanceLightStatusBars(!night);
-        bars.setAppearanceLightNavigationBars(!night);
+        setBarIcons(!isNight(getResources().getConfiguration()));
         ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
             Insets i = insets.getInsets(WindowInsetsCompat.Type.systemBars()
                     | WindowInsetsCompat.Type.displayCutout()
@@ -134,6 +132,25 @@ public class MainActivity extends Activity {
         web.loadUrl(APP_URL);
     }
 
+    private static boolean isNight(Configuration config) {
+        return (config.uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    /** Dark icons on a light background, light icons on a dark one. */
+    private void setBarIcons(boolean lightBackground) {
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), root);
+        bars.setAppearanceLightStatusBars(lightBackground);
+        bars.setAppearanceLightNavigationBars(lightBackground);
+    }
+
+    /** The phone switched between light and dark: tell the page, which repaints without reloading. */
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        String mode = isNight(newConfig) ? "dark" : "light";
+        web.evaluateJavascript("window.dispatchEvent(new CustomEvent('apptheme',{detail:'" + mode + "'}))", null);
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -174,6 +191,29 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void installUpdate(String url) {
             startUpdate(url);
+        }
+
+        /** Whether the phone is in dark mode right now. */
+        @JavascriptInterface
+        public boolean isNight() {
+            return MainActivity.isNight(getResources().getConfiguration());
+        }
+
+        /** The page's background colour (#RRGGBB), so the area behind the system bars matches it. */
+        @JavascriptInterface
+        public void setBackground(String hex) {
+            final int color;
+            try {
+                color = Color.parseColor(hex);
+            } catch (IllegalArgumentException e) {
+                return;
+            }
+            final boolean light = (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) > 140;
+            runOnUiThread(() -> {
+                root.setBackgroundColor(color);
+                web.setBackgroundColor(color);
+                setBarIcons(light);
+            });
         }
     }
 
