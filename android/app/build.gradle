@@ -1,0 +1,80 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The release workflow passes -PversionCode=<run number>; each build is one higher than the last,
+// which is what lets the app tell that a newer release exists.
+def code = (project.findProperty('versionCode') ?: '1') as Integer
+
+// The web app lives at the repository root and is copied into the APK as-is.
+def webRoot = rootProject.projectDir.parentFile
+def webAssets = layout.buildDirectory.dir('web-assets').get().asFile
+
+android {
+    namespace 'io.github.rotfarmer.cookbook'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'io.github.rotfarmer.cookbook'
+        minSdk 26
+        targetSdk 35
+        versionCode code
+        versionName "1.${code}"
+    }
+
+    // Every build must be signed with the same key, or Android refuses to install an update
+    // over the existing app. See android/README.md for what keeping the key here means.
+    signingConfigs {
+        release {
+            storeFile rootProject.file('release.keystore')
+            storePassword 'primal-cookbook'
+            keyAlias 'primal-cookbook'
+            keyPassword 'primal-cookbook'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    sourceSets {
+        main {
+            assets.srcDir webAssets
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+def copyWeb = tasks.register('copyWeb', Copy) {
+    from(webRoot) {
+        include 'index.html', 'css/**', 'js/**', 'icons/**'
+    }
+    into new File(webAssets, 'www')
+}
+tasks.named('preBuild') {
+    dependsOn copyWeb
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.core:core:1.13.1'
+}

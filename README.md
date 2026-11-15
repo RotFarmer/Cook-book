@@ -21,6 +21,12 @@ python3 -m http.server 8000
 then open <http://localhost:8000>. Hosted on GitHub Pages (or any HTTPS host) it also works
 offline and can be added to a phone's home screen.
 
+## Android app
+
+The newest APK is always at
+<https://github.com/RotFarmer/Cook-book/releases/latest/download/primal-cookbook.apk>.
+Install it once; after that the app offers its own updates. See `android/README.md`.
+
 ## Where entries are kept
 
 Entries stay in the browser they were typed into (`localStorage`). **Settings → Copy backup**
@@ -42,6 +48,8 @@ js/views/*.js         one file per section
 js/data/foods.js      the food list for the food log
 js/data/recipes.js    built-in recipes
 sw.js                 offline cache
+js/update.js          update check for the Android app
+android/              the Android shell and its build
 ```
 
 To add or change built-in recipes, edit `js/data/recipes.js`; the format is described at the

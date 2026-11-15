@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The fried-egg mascot, kept inside the adaptive icon's safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#DEE2D5"
+        android:strokeWidth="1.4"
+        android:pathData="M54,28c11,0 22,6 23,18.5c0.8,13 -7.5,26 -22,27c-14.5,0.8 -24,-11 -24,-23.5S41.5,28 54,28z" />
+    <path
+        android:fillColor="#F6C445"
+        android:pathData="M41.5,51a12.5,12.5 0 1,0 25,0a12.5,12.5 0 1,0 -25,0z" />
+    <path
+        android:fillColor="#3A2E05"
+        android:pathData="M47.6,49.5a1.7,1.7 0 1,0 3.4,0a1.7,1.7 0 1,0 -3.4,0z" />
+    <path
+        android:fillColor="#3A2E05"
+        android:pathData="M57,49.5a1.7,1.7 0 1,0 3.4,0a1.7,1.7 0 1,0 -3.4,0z" />
+    <path
+        android:strokeColor="#3A2E05"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M50.6,54.7c2.1,1.8 4.7,1.8 6.8,0" />
+</vector>

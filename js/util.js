@@ -112,6 +112,12 @@ export function field(label, control, hint) {
 
 const stack = [];
 export const sheetOpen = () => stack.length > 0;
+/** Closes the top sheet, if any. Returns whether there was one (used by Android's back button). */
+export const closeTopSheet = () => {
+  if (!stack.length) return false;
+  stack[stack.length - 1].close();
+  return true;
+};
 
 /** Bottom sheet on phones, centered dialog on wider screens. */
 export function sheet({ title, content, footer, onclose }) {

@@ -84,6 +84,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .m-yolk { fill: var(--yolk); }
 .m-face { fill: var(--on-yolk); }
 .m-smile { fill: none; stroke: var(--on-yolk); stroke-width: 1.3; stroke-linecap: round; }
+.savebar.note { background: var(--yolk-soft); }
 .savebar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px;
   padding: 10px 14px; border-radius: var(--r-s); background: var(--berry-soft); color: var(--ink); font-size: 14px;

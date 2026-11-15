@@ -1,7 +1,8 @@
 // Primal Cookbook — boot, tabs and settings.
 
 import { store } from './store.js';
-import { h, icon, sheet, sheetOpen, toast, confirmBtn } from './util.js';
+import { h, icon, sheet, sheetOpen, closeTopSheet, toast, confirmBtn } from './util.js';
+import * as update from './update.js';
 import * as recipes from './views/recipes.js';
 import * as plan from './views/plan.js';
 import * as food from './views/food.js';
@@ -99,6 +100,48 @@ function openSettings() {
   const out = h('textarea', { id: 'backup-out', rows: '4', readonly: true, hidden: true, 'aria-label': 'Backup text' });
   const inp = h('textarea', { id: 'backup-in', rows: '4', placeholder: 'Paste a backup here', 'aria-label': 'Backup to restore' });
   const msg = h('p', { class: 'hint', role: 'status' });
+  const fileIn = h('input', {
+    type: 'file', id: 'backup-file', accept: 'application/json,.json,text/plain,.txt', hidden: true,
+    onchange: async e => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        inp.value = await file.text();
+        msg.textContent = `${file.name} is loaded. Tap Restore to bring it in.`;
+      } catch {
+        msg.textContent = 'That file could not be read.';
+      }
+      e.target.value = '';
+    },
+  });
+
+  // ---- the Android app: installed version and updates, or where to get it ----
+  const appMsg = h('p', { class: 'hint', role: 'status' });
+  const installed = update.installedVersion();
+  async function checkNow() {
+    appMsg.textContent = 'Checking…';
+    try {
+      const found = await update.findUpdate();
+      if (!found) {
+        appMsg.textContent = 'You have the latest version.';
+        return;
+      }
+      s.close();
+      offerUpdate(found);
+    } catch {
+      appMsg.textContent = 'Could not check right now. Make sure you are online and try again.';
+    }
+  }
+  const appSection = installed
+    ? h('section', { class: 'stack tight' },
+      h('h3', null, 'App'),
+      h('p', null, `Version ${installed.name}`),
+      h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', onclick: checkNow }, 'Check for updates')),
+      appMsg)
+    : h('section', { class: 'stack tight' },
+      h('h3', null, 'Android app'),
+      h('p', { class: 'quiet' }, 'Install it once from the link below. After that it updates itself from inside the app.'),
+      h('div', { class: 'btn-row' }, h('a', { class: 'btn', href: update.APK_URL, target: '_blank', rel: 'noopener' }, 'Download the APK')));
 
   async function copyBackup() {
     msg.textContent = 'Collecting your entries…';
@@ -142,15 +185,60 @@ function openSettings() {
           : 'In this browser, on this device only. Clearing the browser’s site data removes them, so keep a backup.')),
       h('section', { class: 'stack tight' },
         h('h3', null, 'Backup'),
-        h('p', { class: 'quiet' }, 'A backup is one block of text holding everything: weight, plan, habits, food log and your own recipes.'),
+        h('p', { class: 'quiet' }, 'A backup is one block of text holding everything: weight, plan, habits, food log and recipes. Restoring replaces only the sections the backup contains.'),
         h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', onclick: copyBackup }, icon('copy', 18), 'Copy backup')),
         out,
         inp,
-        h('div', { class: 'btn-row' }, confirmBtn('Restore from backup', 'Tap again: this replaces current entries', restore)),
+        fileIn,
+        h('div', { class: 'btn-row' },
+          h('button', { class: 'btn', type: 'button', onclick: () => fileIn.click() }, 'Choose a backup file'),
+          confirmBtn('Restore', 'Tap again: this replaces current entries', restore)),
         msg),
+      appSection,
     ],
   });
 }
+
+// ---------- app updates (Android app only) ----------
+
+const updateBar = document.getElementById('updatebar');
+const updateText = document.getElementById('update-text');
+const updateBtn = document.getElementById('update-btn');
+let pendingUpdate = null;
+
+function offerUpdate(release) {
+  pendingUpdate = release;
+  updateText.textContent = `Version ${release.name} is ready to install.`;
+  updateBtn.hidden = false;
+  updateBtn.disabled = false;
+  updateBar.hidden = false;
+}
+
+updateBtn.addEventListener('click', () => {
+  if (!pendingUpdate) return;
+  updateBtn.disabled = true;
+  updateText.textContent = 'Downloading the update…';
+  update.install(pendingUpdate);
+});
+
+// Progress reports from the native side.
+window.addEventListener('appupdate', e => {
+  const { state, detail } = e.detail || {};
+  if (state === 'progress') updateText.textContent = `Downloading the update… ${detail}%`;
+  else if (state === 'permission') {
+    updateText.textContent = 'Allow Primal Cookbook to install apps, then come back here.';
+    updateBtn.disabled = false;
+  } else if (state === 'installing') {
+    updateText.textContent = 'Android is installing the update. Tap Update again if nothing opened.';
+    updateBtn.disabled = false;
+  } else if (state === 'error') {
+    updateText.textContent = detail || 'The update did not work. Try again.';
+    updateBtn.disabled = false;
+  }
+});
+
+// Android's back button closes an open sheet before it leaves the app.
+window.__back = closeTopSheet;
 
 // ---------- wiring ----------
 
@@ -183,8 +271,9 @@ window.addEventListener('resize', () => {
 });
 
 // Offline support when served as a normal website (service workers do not run inside an artifact).
-if (!window.claude && 'serviceWorker' in navigator && location.protocol === 'https:') {
+if (!window.claude && !update.native && 'serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 boot();
+update.autoCheck().then(found => { if (found) offerUpdate(found); });
