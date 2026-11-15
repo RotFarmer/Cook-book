@@ -116,15 +116,17 @@ export const store = {
   },
 
   /**
-   * The book recipes were written in ounces and pounds; rewrite them once as grams and
-   * millilitres. Each collection is marked when done, so edits made afterwards are left alone.
+   * The book recipes were written in ounces and pounds; rewrite them once as grams. Each
+   * collection is marked when done (metric: 2), so edits made afterwards are left alone.
+   * A collection marked `true` was converted by the first version, which gave jar sizes in
+   * millilitres; those are turned into grams as well.
    */
   metricLibrary() {
     for (const key of LIBRARY) {
       const doc = this.data[key];
-      if (!doc || doc.metric || !doc.items.length) continue;
-      for (const recipe of doc.items) recipeToMetric(recipe);
-      doc.metric = true;
+      if (!doc || doc.metric === 2 || !doc.items.length) continue;
+      for (const recipe of doc.items) recipeToMetric(recipe, doc.metric === true);
+      doc.metric = 2;
       this.save(key);
     }
   },

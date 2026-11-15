@@ -1,6 +1,6 @@
 // Keeps the app usable offline when it is served as a normal website.
 // Cached files are served first and refreshed in the background.
-const CACHE = 'primal-cookbook-v5';
+const CACHE = 'primal-cookbook-v6';
 const SHELL = [
   './', 'index.html', 'css/styles.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/app.js', 'js/store.js', 'js/util.js', 'js/update.js', 'js/unlock.js', 'js/metric.js', 'js/data/recipes.pack.js', 'js/data/foods.js', 'js/data/recipes.js',

@@ -56,7 +56,7 @@ js/data/recipes.js    built-in recipes
 sw.js                 offline cache
 js/update.js          update check for the Android app
 js/unlock.js          opens the locked recipe collection
-js/metric.js          rewrites ounces and pounds in recipes as grams and millilitres
+js/metric.js          rewrites ounces and pounds in recipes as grams
 js/data/recipes.pack.js  the recipe collection, locked (made by tools/pack-recipes.mjs)
 android/              the Android shell and its build
 ```
