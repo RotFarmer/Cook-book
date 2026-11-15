@@ -40,6 +40,14 @@ export function toMetric(text) {
   if (!text || !/\b(?:oz|ounces?|lbs?|pounds?)\b/i.test(text)) return text;
   let out = text;
 
+  // A list that shares one unit: "4, 8, 12 and 16 oz sizes" → "115, 225, 340 and 455 g sizes".
+  out = out.replace(
+    new RegExp(`((?:${NUM}\\s*,\\s*)+${NUM}\\s*,?\\s*(?:and|or)\\s*)(${NUM})[-\\s]*(${OZ}|${LB})\\b\\.?`, 'gi'),
+    (all, lead, last, unit) => {
+      const per = /^o/i.test(unit) ? OZ_GRAMS : 453.6;
+      return lead.replace(new RegExp(NUM, 'g'), n => grams(value(n) * per)) + grams(value(last) * per) + ' g';
+    });
+
   // Container sizes, including "4- or 8-oz jar".
   out = out.replace(
     new RegExp(`(${NUM})(?:-?\\s*(or|to)\\s*(${NUM}))?[-\\s]*${OZ}\\b\\.?(\\s*\\([^)]*\\))?[-\\s]+(${CONTAINER})\\b`, 'gi'),

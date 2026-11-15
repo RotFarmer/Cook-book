@@ -10,6 +10,7 @@
 // imported from books (library-1 … library-4).
 
 import { recipeToMetric } from './metric.js';
+import { applyCorrections, CORRECTIONS_REV } from './data/corrections.js';
 
 const NS = 'primal-cookbook:';
 const LIBRARY = ['library-1', 'library-2', 'library-3', 'library-4'];
@@ -127,6 +128,14 @@ export const store = {
       if (!doc || doc.metric === 2 || !doc.items.length) continue;
       for (const recipe of doc.items) recipeToMetric(recipe, doc.metric === true);
       doc.metric = 2;
+      this.save(key);
+    }
+    // Then the corrections from re-checking the cards against the books, once per collection.
+    for (const key of LIBRARY) {
+      const doc = this.data[key];
+      if (!doc || !doc.items.length || (doc.rev || 0) >= CORRECTIONS_REV) continue;
+      applyCorrections(doc.items);
+      doc.rev = CORRECTIONS_REV;
       this.save(key);
     }
   },
