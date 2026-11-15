@@ -7,16 +7,25 @@ import { RECIPES } from '../data/recipes.js';
 let q = '';
 let cat = 'all';
 
-export const allRecipes = () => [...RECIPES, ...store.data.recipes.mine];
+// Built-in recipes, recipes imported from books, then your own.
+export const allRecipes = () => [...RECIPES, ...store.libraryRecipes(), ...store.data.recipes.mine];
 export const findRecipe = id => allRecipes().find(r => r.id === id);
 const isMine = r => store.data.recipes.mine.includes(r);
 const isSaved = r => store.data.recipes.saved.includes(r.id);
 const lines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
 
+const CATEGORY_ORDER = [
+  'Basics & preparations', 'Drinks & shakes', 'Dairy & cheese', 'Sauces & dressings', 'Red meat', 'Poultry',
+  'Fish & seafood', 'Organs & marrow', 'Soups & broths', 'Raw starch', 'Salads & pickles', 'Sweets & desserts',
+  'Baby food', 'Remedies & beauty',
+];
+
+// Known categories in a fixed order, then any you made up yourself in the order they appear.
 function categories() {
   const seen = [];
   for (const r of allRecipes()) if (r.category && !seen.includes(r.category)) seen.push(r.category);
-  return seen;
+  const rank = c => (CATEGORY_ORDER.includes(c) ? CATEGORY_ORDER.indexOf(c) : CATEGORY_ORDER.length);
+  return seen.map((c, i) => [c, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([c]) => c);
 }
 
 export function render(root, ctx) {
@@ -107,7 +116,7 @@ export function openRecipe(id, ctx) {
   }
   drawHeart();
 
-  const meta = [r.category, r.source && (r.page ? `${r.source}, p. ${r.page}` : r.source), isMine(r) && 'My recipe']
+  const meta = [r.category, r.source && (r.page ? `${r.source}, PDF page ${r.page}` : r.source), isMine(r) && 'My recipe']
     .filter(Boolean).join(' · ');
   const method = r.method || [];
   const s = sheet({

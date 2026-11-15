@@ -13,6 +13,8 @@
 //     notes: 'Anything else worth knowing.', (optional)
 //   }
 //
-// Empty for now: the recipes from the two PDFs go here once they have been read.
+// This list is for recipes that ship with the app itself. Recipes imported from your own
+// books are not stored here: they live with the rest of your private entries (the
+// "library-N" documents in js/store.js) and are included in backups.
 
 export const RECIPES = [];

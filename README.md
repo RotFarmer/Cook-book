@@ -45,4 +45,5 @@ sw.js                 offline cache
 ```
 
 To add or change built-in recipes, edit `js/data/recipes.js`; the format is described at the
-top of that file. To change the food list, edit `js/data/foods.js`.
+top of that file. Recipes imported from your own books are kept with your private entries
+instead of in this repository, and travel with backups. To change the food list, edit `js/data/foods.js`.

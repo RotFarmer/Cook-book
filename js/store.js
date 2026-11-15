@@ -6,10 +6,12 @@
 //    their own private documents (data/users/<id>/…), so phone and tablet stay in step.
 //
 // Data is split into a few small documents: settings, weights, plan, habits, recipes,
-// and one food-log document per month (log-YYYY-MM).
+// one food-log document per month (log-YYYY-MM), and up to four recipe collections
+// imported from books (library-1 … library-4).
 
 const NS = 'primal-cookbook:';
-const FIXED = ['settings', 'weights', 'plan', 'habits', 'recipes'];
+const LIBRARY = ['library-1', 'library-2', 'library-3', 'library-4'];
+const FIXED = ['settings', 'weights', 'plan', 'habits', 'recipes', ...LIBRARY];
 const LOG_KEY = /^log-\d{4}-\d{2}$/;
 
 const DEFAULTS = {
@@ -24,7 +26,12 @@ const DEFAULTS = {
 };
 
 const clone = o => JSON.parse(JSON.stringify(o));
-const fresh = key => (LOG_KEY.test(key) ? { days: {} } : DEFAULTS[key]());
+const fresh = key => {
+  if (LOG_KEY.test(key)) return { days: {} };
+  // A book's recipes: {source, author, items: [{id, title, category, page, ingredients, method, …}]}
+  if (LIBRARY.includes(key)) return { source: '', author: '', items: [] };
+  return DEFAULTS[key]();
+};
 const normalize = (key, v) => Object.assign(fresh(key), v && typeof v === 'object' ? v : {});
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const within = (p, ms) =>
@@ -88,6 +95,14 @@ export const store = {
 
   has(key) {
     return key in this.data;
+  },
+
+  /** Recipes imported from books, each tagged with the book it came from. */
+  libraryRecipes() {
+    return LIBRARY.flatMap(key => {
+      const doc = this.data[key];
+      return doc ? doc.items.map(r => ({ ...r, source: doc.source })) : [];
+    });
   },
 
   /** Load a document if it is not in memory yet. Rejects if the cloud cannot be reached. */
