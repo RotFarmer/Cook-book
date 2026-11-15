@@ -13,8 +13,8 @@
 //     notes: 'Anything else worth knowing.', (optional)
 //   }
 //
-// This list is for recipes that ship with the app itself. Recipes imported from your own
-// books are not stored here: they live with the rest of your private entries (the
-// "library-N" documents in js/store.js) and are included in backups.
+// This list is for recipes that ship with the app in the open. The collection taken from books
+// is not stored here: it ships locked in recipes.pack.js, and once opened it lives with the
+// rest of your private entries (the "library-N" documents in js/store.js).
 
 export const RECIPES = [];

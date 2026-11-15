@@ -195,6 +195,10 @@ function openSettings() {
           confirmBtn('Restore', 'Tap again: this replaces current entries', restore)),
         msg),
       appSection,
+      store.data.settings.recipeCode && h('section', { class: 'stack tight' },
+        h('h3', null, 'Recipe code'),
+        h('p', { class: 'code' }, store.data.settings.recipeCode),
+        h('p', { class: 'quiet' }, 'Opens the recipe collection on a new device, such as the Android app. Keep it to yourself.')),
     ],
   });
 }

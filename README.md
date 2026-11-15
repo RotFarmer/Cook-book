@@ -49,9 +49,12 @@ js/data/foods.js      the food list for the food log
 js/data/recipes.js    built-in recipes
 sw.js                 offline cache
 js/update.js          update check for the Android app
+js/unlock.js          opens the locked recipe collection
+js/data/recipes.pack.js  the recipe collection, locked (made by tools/pack-recipes.mjs)
 android/              the Android shell and its build
 ```
 
 To add or change built-in recipes, edit `js/data/recipes.js`; the format is described at the
-top of that file. Recipes imported from your own books are kept with your private entries
-instead of in this repository, and travel with backups. To change the food list, edit `js/data/foods.js`.
+top of that file. The recipe collection taken from books ships in locked form
+(`js/data/recipes.pack.js`) and is opened once per device with the owner's code; after that it
+is kept with the rest of your entries and travels with backups. To change the food list, edit `js/data/foods.js`.

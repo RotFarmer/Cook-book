@@ -1,7 +1,8 @@
 // Recipes: the built-in collection plus the ones you add, grouped by category.
 
 import { store } from '../store.js';
-import { h, icon, sheet, field, empty, confirmBtn, uid } from '../util.js';
+import { h, icon, sheet, field, empty, confirmBtn, uid, toast } from '../util.js';
+import { unlock, packCount } from '../unlock.js';
 import { RECIPES } from '../data/recipes.js';
 
 let q = '';
@@ -28,7 +29,42 @@ function categories() {
   return seen.map((c, i) => [c, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([c]) => c);
 }
 
+// The recipe collection ships locked; this card opens it with the owner's code.
+function unlockCard(ctx) {
+  const input = h('input', {
+    type: 'text', id: 'recipe-code', autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false',
+    placeholder: 'XXXX-XXXX-XXXX', 'aria-label': 'Recipe code',
+  });
+  const msg = h('p', { class: 'error', role: 'alert', hidden: true });
+  const btn = h('button', { class: 'btn primary', type: 'submit' }, 'Unlock');
+  const form = h('form', {
+    class: 'add-row',
+    onsubmit: async e => {
+      e.preventDefault();
+      if (!input.value.trim()) return;
+      btn.disabled = true;
+      btn.textContent = 'Unlocking…';
+      msg.hidden = true;
+      try {
+        store.importAll(await unlock(input.value));
+        toast(`${packCount} recipes unlocked`);
+        ctx.refresh();
+      } catch {
+        msg.textContent = 'That code did not work. Check it and try again.';
+        msg.hidden = false;
+        btn.disabled = false;
+        btn.textContent = 'Unlock';
+      }
+    },
+  }, input, btn);
+  return h('section', { class: 'card' },
+    h('h2', null, `${packCount} recipes are waiting`),
+    h('p', { class: 'quiet' }, 'Enter your recipe code to open them. You only need to do this once on each device.'),
+    form, msg);
+}
+
 export function render(root, ctx) {
+  const locked = packCount > 0 && !store.libraryRecipes().length;
   const chipsEl = h('div', { class: 'chips scroll' });
   const listEl = h('div', { class: 'stack' });
   const searchIn = h('input', {
@@ -41,6 +77,7 @@ export function render(root, ctx) {
     h('div', { class: 'view-head' },
       h('h1', null, 'Recipes'),
       h('button', { class: 'btn primary small', type: 'button', onclick: () => editRecipe(null, ctx) }, icon('plus', 18), 'Add recipe')),
+    locked && unlockCard(ctx),
     searchIn, chipsEl, listEl);
 
   function draw() {
@@ -57,9 +94,7 @@ export function render(root, ctx) {
     searchIn.hidden = !all.length;
 
     if (!all.length) {
-      listEl.replaceChildren(empty(
-        'No recipes yet',
-        'The recipes from your PDFs have not been added yet. You can add your own in the meantime.'));
+      listEl.replaceChildren(...(locked ? [] : [empty('No recipes yet', 'Add your first one with the button above.')]));
       return;
     }
 
