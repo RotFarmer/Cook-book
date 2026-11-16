@@ -1,4 +1,5 @@
-// Food log: what you ate and when, with grams if you want them. No calories, no macros.
+// Food log: what you ate and when, with an amount if you want one: grams for most foods,
+// a count for eggs. No calories, no macros.
 
 import { store } from '../store.js';
 import { h, icon, sheet, field, dateNav, empty, confirmBtn, today, nowTime, fmtTime, dayName, uid } from '../util.js';
@@ -45,8 +46,17 @@ export function render(root, ctx) {
         e.note && h('span', { class: 'row-note' }, e.note))))));
 }
 
-// "Raw milk 250 g" when grams were logged for that food, otherwise just the name.
-const withGrams = (entry, food) => (entry.grams && entry.grams[food] ? `${food} ${entry.grams[food]} g` : food);
+// Eggs are counted, not weighed: "Raw eggs", "Egg yolks", "Duck eggs", and any food of your
+// own with "egg" or "yolk" in its name.
+const isCounted = food => /\b(eggs?|yolks?)\b/i.test(food);
+
+// "Raw milk 250 g" or "Raw eggs ×3" when an amount was logged, otherwise just the name.
+// An egg entry made before eggs were counted keeps the grams it was logged with.
+function withGrams(entry, food) {
+  if (entry.counts && entry.counts[food]) return `${food} ×${entry.counts[food]}`;
+  if (entry.grams && entry.grams[food]) return `${food} ${entry.grams[food]} g`;
+  return food;
+}
 
 // Most-logged foods in the months that are open, for quick picking.
 function recentFoods() {
@@ -64,8 +74,8 @@ function edit(entry, ctx) {
   const key = keyFor(date);
   const settings = store.data.settings;
   const draft = entry
-    ? { time: entry.time, foods: [...entry.foods], note: entry.note || '', grams: { ...(entry.grams || {}) } }
-    : { time: date === today() ? nowTime() : '12:00', foods: [], note: '', grams: {} };
+    ? { time: entry.time, foods: [...entry.foods], note: entry.note || '', grams: { ...(entry.grams || {}) }, counts: { ...(entry.counts || {}) } }
+    : { time: date === today() ? nowTime() : '12:00', foods: [], note: '', grams: {}, counts: {} };
   let q = '';
 
   const timeIn = h('input', { type: 'time', id: 'food-time', value: draft.time });
@@ -87,21 +97,28 @@ function edit(entry, ctx) {
   }
 
   function drawSelected() {
-    // One line per chosen food: its name, an optional weight, and a way to take it off again.
+    // One line per chosen food: its name, an optional amount, and a way to take it off again.
+    // The amount is grams, except for eggs, which are counted.
     selectedEl.replaceChildren(...(draft.foods.length
-      ? draft.foods.map((f, i) => h('div', { class: 'sel-row' },
-        h('span', { class: 'sel-name' }, f),
-        h('input', {
-          type: 'number', class: 'grams', id: `food-grams-${i}`, inputmode: 'numeric', min: '0', max: '9999', step: '1',
-          placeholder: 'g', 'aria-label': `Grams of ${f} (optional)`, value: draft.grams[f] || '',
-          oninput: e => {
-            const g = Math.round(parseFloat(e.target.value));
-            if (g > 0) draft.grams[f] = g;
-            else delete draft.grams[f];
-          },
-        }),
-        h('button', { class: 'icon-btn', type: 'button', 'aria-label': `Remove ${f}`, onclick: () => toggle(f) }, icon('x', 18))))
-      : [h('span', { class: 'quiet' }, 'Tap foods below to add them. Grams are optional.')]));
+      ? draft.foods.map((f, i) => {
+        const counted = isCounted(f);
+        const amounts = counted ? draft.counts : draft.grams;
+        const unit = counted ? (/yolk/i.test(f) ? 'yolks' : 'eggs') : 'g';
+        return h('div', { class: 'sel-row' },
+          h('span', { class: 'sel-name' }, f),
+          h('input', {
+            type: 'number', class: 'grams', id: `food-grams-${i}`, inputmode: 'numeric', min: '0', max: counted ? '99' : '9999', step: '1',
+            placeholder: unit, 'aria-label': counted ? `Number of ${unit} (optional)` : `Grams of ${f} (optional)`, value: amounts[f] || '',
+            oninput: e => {
+              const n = Math.round(parseFloat(e.target.value));
+              if (n > 0) amounts[f] = n;
+              else delete amounts[f];
+              if (counted && n > 0) delete draft.grams[f]; // a count replaces grams logged earlier
+            },
+          }),
+          h('button', { class: 'icon-btn', type: 'button', 'aria-label': `Remove ${f}`, onclick: () => toggle(f) }, icon('x', 18)));
+      })
+      : [h('span', { class: 'quiet' }, 'Tap foods below to add them. Amounts are optional: grams, or a count for eggs.')]));
     saveBtn.disabled = !draft.foods.length;
   }
 
@@ -150,9 +167,13 @@ function edit(entry, ctx) {
     const time = timeIn.value || draft.time;
     const note = noteIn.value.trim();
     const grams = {};
-    for (const f of draft.foods) if (draft.grams[f] > 0) grams[f] = draft.grams[f];
-    if (entry) Object.assign(entry, { time, foods: draft.foods, note, grams });
-    else (doc.days[date] ||= []).push({ id: uid(), time, foods: draft.foods, note, grams });
+    const counts = {};
+    for (const f of draft.foods) {
+      if (draft.grams[f] > 0) grams[f] = draft.grams[f];
+      if (draft.counts[f] > 0) counts[f] = draft.counts[f];
+    }
+    if (entry) Object.assign(entry, { time, foods: draft.foods, note, grams, counts });
+    else (doc.days[date] ||= []).push({ id: uid(), time, foods: draft.foods, note, grams, counts });
     store.save(key);
     s.close();
     ctx.refresh();

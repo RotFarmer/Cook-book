@@ -6,7 +6,7 @@ A small personal app for a raw primal diet. Five sections:
   recipe, attach photos, and mark favourites.
 - **Plan** – your daily meal plan as free-text blocks, one per meal. Tick a block when it is
   eaten; the ticks clear each new day and the text stays until you edit it.
-- **Food** – a log of what you ate and when, with optional grams. Foods are picked from a list
+- **Food** – a log of what you ate and when, with an optional amount (grams, or a count for eggs). Foods are picked from a list
   of what is common on Aajonus Vonderplanitz's raw primal diet plus every recipe ingredient.
   No calories, nutrients or macros.
 - **Habits** – daily habits (sunlight, walking, …) to tick off, each with an emoji of your choice.
