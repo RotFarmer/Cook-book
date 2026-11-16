@@ -11,7 +11,7 @@ the APK at build time, so the app works offline and keeps its entries on the pho
    number is higher than the installed version, a bar offers the update. Settings → Check for
    updates does the same on demand.
 3. Tapping Update downloads the APK and hands it to Android's installer. The first time,
-   Android asks you to allow Primal Cookbook to install apps.
+   Android asks you to allow primal to install apps.
 
 Entries survive updates. They are lost if the app is uninstalled, so copy a backup first
 (Settings → Copy backup).

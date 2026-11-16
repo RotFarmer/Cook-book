@@ -1,6 +1,6 @@
 {
-  "name": "Primal Cookbook",
-  "short_name": "Cookbook",
+  "name": "primal",
+  "short_name": "primal",
   "description": "Recipes, meal plan, food log, habits and body weight for a raw primal diet.",
   "start_url": "./",
   "scope": "./",

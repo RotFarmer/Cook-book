@@ -3,7 +3,7 @@
 //
 //   node tools/pack-recipes.mjs <backup.json> <code>
 //
-// <backup.json> is a Primal Cookbook backup that contains the library-N recipe sections
+// <backup.json> is a primal backup that contains the library-N recipe sections
 // (Settings → Copy backup produces one). <code> is the unlock code the owner types once per
 // device. The plain recipes and the code are never committed.
 //

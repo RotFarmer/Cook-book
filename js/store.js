@@ -319,7 +319,7 @@ export const store = {
   /** Replace current data with a backup made by exportAll(). Returns how many documents were restored. */
   importAll(dump) {
     if (!dump || dump.app !== 'primal-cookbook' || !dump.data || typeof dump.data !== 'object') {
-      throw new Error('That does not look like a Primal Cookbook backup.');
+      throw new Error('That does not look like a primal backup.');
     }
     let n = 0;
     for (const [key, value] of Object.entries(dump.data)) {

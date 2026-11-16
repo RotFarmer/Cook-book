@@ -219,7 +219,7 @@ public class MainActivity extends Activity {
 
     private void startUpdate(final String url) {
         if (url == null || !url.startsWith(RELEASE_PREFIX)) {
-            emit("error", "That download is not a Primal Cookbook release.");
+            emit("error", "That download is not a primal release.");
             return;
         }
         if (downloading) return;
