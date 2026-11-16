@@ -12,7 +12,7 @@ A small personal app for a raw primal diet. Five sections:
 - **Habits** – daily habits (sunlight, walking, …) to tick off, each with an emoji of your choice.
 - **Weight** – body weight over time, with a chart.
 - **Lists** – a to-do list and a to-buy list.
-- **Notes** – free-text notes.
+- **Notes** – free-text notes, shown with Markdown formatting (headings, bold, italics, dividers, lists).
 
 Settings has six quiet colour themes; light and dark follow the device.
 
@@ -58,6 +58,7 @@ sw.js                 offline cache
 js/update.js          update check for the Android app
 js/unlock.js          opens the locked recipe collection
 js/metric.js          rewrites ounces and pounds in recipes as grams
+js/markdown.js        Markdown rendering for notes
 js/data/recipes.pack.js  the recipe collection, locked (made by tools/pack-recipes.mjs)
 js/data/corrections.js   corrections applied once to collections already stored
 android/              the Android shell and its build

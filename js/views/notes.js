@@ -1,17 +1,19 @@
-// Notes: free text you want to keep, newest edit first. Tapping a note opens it for reading;
-// editing is one more tap from there.
+// Notes: free text you want to keep, newest edit first. Tapping a note opens it for reading,
+// with Markdown formatting shown as formatting; editing is one more tap from there.
 
 import { store } from '../store.js';
 import { h, icon, sheet, field, empty, confirmBtn, uid, shortDate, ymd } from '../util.js';
+import { renderMarkdown, plainText } from '../markdown.js';
 
 const editedOn = note => (note.updated ? `Edited ${shortDate(ymd(new Date(note.updated)))}` : '');
 
-// An untitled note is headed by its first line; the rest is its body.
+// An untitled note is headed by its first line (without any formatting marks); the rest is
+// its body.
 function parts(note) {
   const lines = (note.text || '').split('\n');
   return note.title
     ? { title: note.title, body: note.text || '' }
-    : { title: lines[0] || 'Untitled', body: lines.slice(1).join('\n').trim() };
+    : { title: plainText(lines[0]) || 'Untitled', body: lines.slice(1).join('\n').trim() };
 }
 
 export function render(root, ctx) {
@@ -30,7 +32,7 @@ export function render(root, ctx) {
     const { title, body } = parts(note);
     return h('button', { class: 'note-card', type: 'button', onclick: () => read(note, ctx) },
       h('span', { class: 'note-title' }, title),
-      body && h('span', { class: 'note-text' }, body),
+      plainText(body) && h('span', { class: 'note-text' }, plainText(body)),
       h('span', { class: 'hint' }, editedOn(note)));
   }));
 }
@@ -41,7 +43,7 @@ function read(note, ctx) {
   const s = sheet({
     title,
     content: [
-      body ? h('p', { class: 'note-read' }, body) : h('p', { class: 'quiet' }, 'This note has only a title.'),
+      body ? h('div', { class: 'note-read md' }, renderMarkdown(body)) : h('p', { class: 'quiet' }, 'This note has only a title.'),
       h('p', { class: 'hint' }, editedOn(note)),
     ],
     footer: [h('span', { class: 'grow' }),
@@ -74,7 +76,8 @@ function edit(note, ctx) {
 
   const s = sheet({
     title: note ? 'Edit note' : 'Add note',
-    content: [field('Title', title), field('Note', text)],
+    content: [field('Title', title), field('Note', text,
+      'Formatting: ### heading · **bold** · *italic* · --- divider · * list item')],
     footer: [note && confirmBtn('Delete', 'Tap again to delete', remove), h('span', { class: 'grow' }),
       h('button', { class: 'btn primary', type: 'button', onclick: save }, 'Save')],
     onclose: ctx.refresh,
