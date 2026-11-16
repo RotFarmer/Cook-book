@@ -12,6 +12,7 @@ A small personal app for a raw primal diet. Five sections:
 - **Habits** – daily habits (sunlight, walking, …) to tick off, each with an emoji of your choice.
 - **Weight** – body weight over time, with a chart.
 - **Lists** – a to-do list and a to-buy list.
+- **Notes** – free-text notes.
 
 Settings has six quiet colour themes; light and dark follow the device.
 

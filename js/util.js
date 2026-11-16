@@ -46,6 +46,7 @@ const ICONS = {
   sliders: '<path d="M4 8h8M18 8h2M4 16h2M12 16h8"/><circle cx="15" cy="8" r="2.5"/><circle cx="9" cy="16" r="2.5"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   list: '<path d="M9.5 7h10M9.5 12h10M9.5 17h10"/><path d="M4.2 7l.9.9 1.6-1.8M4.2 12l.9.9 1.6-1.8M4.2 17l.9.9 1.6-1.8"/>',
+  note: '<path d="M7 4h8l4 4v12H7z"/><path d="M15 4v4h4M10 12.5h6M10 16h6"/>',
   pencil: '<path d="M5 19l1-4.2L16.2 4.6l3.2 3.2L9.2 18 5 19z"/><path d="M14 6.8l3.2 3.2"/>',
   image: '<rect x="4" y="5" width="16" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M5 17l4.5-4.5 3.5 3.5 2.5-2.5L20 17"/>',
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/>',

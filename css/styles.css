@@ -190,6 +190,12 @@ button { -webkit-tap-highlight-color: transparent; }
 .block.on .egg::before { border-color: transparent; }
 .block.on h2, .block.on .block-text { color: var(--ink-3); }
 
+/* ---------- notes ---------- */
+.note-card { display: grid; gap: 6px; width: 100%; padding: 14px 16px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); cursor: pointer; }
+.note-card:hover { background: var(--sunk); }
+.note-title { font: 500 18px/1.25 var(--font-display); overflow-wrap: anywhere; }
+.note-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+
 /* ---------- to-do / to-buy ---------- */
 .todo { padding: 0 8px 0 0; }
 .todo-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 0 10px 16px; border: 0; background: none; text-align: left; cursor: pointer; }

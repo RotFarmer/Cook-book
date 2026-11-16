@@ -14,7 +14,7 @@ import { applyCorrections, CORRECTIONS_REV } from './data/corrections.js';
 
 const NS = 'primal-cookbook:';
 const LIBRARY = ['library-1', 'library-2', 'library-3', 'library-4'];
-const FIXED = ['settings', 'weights', 'plan', 'habits', 'recipes', 'lists', ...LIBRARY];
+const FIXED = ['settings', 'weights', 'plan', 'habits', 'recipes', 'lists', 'notes', ...LIBRARY];
 const LOG_KEY = /^log-\d{4}-\d{2}$/;
 
 const DEFAULTS = {
@@ -28,6 +28,7 @@ const DEFAULTS = {
   }),
   recipes: () => ({ mine: [], saved: [] }),
   lists: () => ({ todo: [], buy: [] }), // [{id, text, done}]
+  notes: () => ({ items: [] }), // [{id, title, text, updated}]
 };
 
 const clone = o => JSON.parse(JSON.stringify(o));

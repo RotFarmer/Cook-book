@@ -9,6 +9,7 @@ import * as food from './views/food.js';
 import * as habits from './views/habits.js';
 import * as weight from './views/weight.js';
 import * as lists from './views/lists.js';
+import * as notes from './views/notes.js';
 
 const TABS = [
   { id: 'recipes', label: 'Recipes', icon: 'book', view: recipes },
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'habits', label: 'Habits', icon: 'sun', view: habits },
   { id: 'weight', label: 'Weight', icon: 'trend', view: weight },
   { id: 'lists', label: 'Lists', icon: 'list', view: lists },
+  { id: 'notes', label: 'Notes', icon: 'note', view: notes },
 ];
 const PREF = 'primal-cookbook-ui:tab';
 const PREF_PALETTE = 'primal-cookbook-ui:palette';
@@ -259,7 +261,7 @@ function openSettings() {
           : 'In this browser, on this device only. Clearing the browser’s site data removes them, so keep a backup.')),
       h('section', { class: 'stack tight' },
         h('h3', null, 'Backup'),
-        h('p', { class: 'quiet' }, 'A backup is one block of text holding everything except photos: weight, plan, habits, lists, food log and recipes. Restoring replaces only the sections the backup contains.'),
+        h('p', { class: 'quiet' }, 'A backup is one block of text holding everything except photos: weight, plan, habits, lists, notes, food log and recipes. Restoring replaces only the sections the backup contains.'),
         h('div', { class: 'btn-row' }, h('button', { class: 'btn', type: 'button', onclick: copyBackup }, icon('copy', 18), 'Copy backup')),
         out,
         inp,
