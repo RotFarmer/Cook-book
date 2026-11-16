@@ -1,4 +1,4 @@
-// primal — boot, tabs and settings.
+// Primal — boot, tabs and settings.
 
 import { store } from './store.js';
 import { h, icon, sheet, sheetOpen, closeTopSheet, toast, confirmBtn } from './util.js';
@@ -306,7 +306,7 @@ window.addEventListener('appupdate', e => {
   const { state, detail } = e.detail || {};
   if (state === 'progress') updateText.textContent = `Downloading the update… ${detail}%`;
   else if (state === 'permission') {
-    updateText.textContent = 'Allow primal to install apps, then come back here.';
+    updateText.textContent = 'Allow Primal to install apps, then come back here.';
     updateBtn.disabled = false;
   } else if (state === 'installing') {
     updateText.textContent = 'Android is installing the update. Tap Update again if nothing opened.';

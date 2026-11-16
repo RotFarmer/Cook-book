@@ -43,6 +43,6 @@ jobs:
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk primal-cookbook.apk
           gh release create "v${{ github.run_number }}" primal-cookbook.apk \
-            --title "primal 1.${{ github.run_number }}" \
+            --title "Primal 1.${{ github.run_number }}" \
             --notes "$(git log -1 --pretty=%s)" \
             --target "${{ github.sha }}"

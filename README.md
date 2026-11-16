@@ -1,4 +1,4 @@
-# primal
+# Primal
 
 A small personal app for a raw primal diet. Five sections:
 
