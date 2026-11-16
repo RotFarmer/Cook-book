@@ -1,9 +1,18 @@
-// Notes: free text you want to keep, newest edit first.
+// Notes: free text you want to keep, newest edit first. Tapping a note opens it for reading;
+// editing is one more tap from there.
 
 import { store } from '../store.js';
 import { h, icon, sheet, field, empty, confirmBtn, uid, shortDate, ymd } from '../util.js';
 
 const editedOn = note => (note.updated ? `Edited ${shortDate(ymd(new Date(note.updated)))}` : '');
+
+// An untitled note is headed by its first line; the rest is its body.
+function parts(note) {
+  const lines = (note.text || '').split('\n');
+  return note.title
+    ? { title: note.title, body: note.text || '' }
+    : { title: lines[0] || 'Untitled', body: lines.slice(1).join('\n').trim() };
+}
 
 export function render(root, ctx) {
   const notes = store.data.notes.items.slice().sort((a, b) => (b.updated || '').localeCompare(a.updated || ''));
@@ -18,15 +27,27 @@ export function render(root, ctx) {
   }
 
   root.append(...notes.map(note => {
-    // An untitled note is headed by its first line.
-    const lines = (note.text || '').split('\n');
-    const title = note.title || lines[0] || 'Untitled';
-    const body = note.title ? note.text : lines.slice(1).join('\n').trim();
-    return h('button', { class: 'note-card', type: 'button', onclick: () => edit(note, ctx) },
+    const { title, body } = parts(note);
+    return h('button', { class: 'note-card', type: 'button', onclick: () => read(note, ctx) },
       h('span', { class: 'note-title' }, title),
       body && h('span', { class: 'note-text' }, body),
       h('span', { class: 'hint' }, editedOn(note)));
   }));
+}
+
+// Reading mode: the whole note, nothing editable, with a button to edit it.
+function read(note, ctx) {
+  const { title, body } = parts(note);
+  const s = sheet({
+    title,
+    content: [
+      body ? h('p', { class: 'note-read' }, body) : h('p', { class: 'quiet' }, 'This note has only a title.'),
+      h('p', { class: 'hint' }, editedOn(note)),
+    ],
+    footer: [h('span', { class: 'grow' }),
+      h('button', { class: 'btn primary', type: 'button', onclick: () => { s.close(); edit(note, ctx); } }, icon('pencil', 18), 'Edit')],
+    onclose: ctx.refresh,
+  });
 }
 
 function edit(note, ctx) {
@@ -43,6 +64,7 @@ function edit(note, ctx) {
     else data.items.push({ id: uid(), ...fields });
     store.save('notes');
     s.close();
+    if (note && data.items.includes(note)) read(note, ctx); // back to reading what was just saved
   }
   function remove() {
     data.items = data.items.filter(n => n !== note);

@@ -196,6 +196,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .note-card { display: grid; gap: 6px; width: 100%; padding: 14px 16px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); cursor: pointer; }
 .note-card:hover { background: var(--sunk); }
 .note-title { font: 500 18px/1.25 var(--font-display); overflow-wrap: anywhere; }
+.note-read { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 17px; line-height: 1.6; user-select: text; -webkit-user-select: text; }
 .note-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
 
 /* ---------- to-do / to-buy ---------- */
