@@ -35,12 +35,56 @@ const CATEGORY_ORDER = [
   'Baby food', 'Remedies & beauty',
 ];
 
-// Known categories in a fixed order, then any you made up yourself in the order they appear.
+const AILMENTS = '@ailments'; // the "Ailments" view; the @ keeps it apart from a category of that name
+const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+
+// Categories you added yourself (Recipes → + Category, or "New category…" when editing).
+const ownCategories = () => (store.data.recipes.categories ||= []);
+
+// The categories shown on the Recipes screen: those in use plus your own, built-in ones first
+// in a fixed order.
 function categories() {
   const seen = [];
   for (const r of allRecipes()) if (r.category && !seen.includes(r.category)) seen.push(r.category);
+  for (const c of ownCategories()) if (!seen.includes(c)) seen.push(c);
   const rank = c => (CATEGORY_ORDER.includes(c) ? CATEGORY_ORDER.indexOf(c) : CATEGORY_ORDER.length);
   return seen.map((c, i) => [c, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([c]) => c);
+}
+
+// Every category a recipe can be filed under: all the built-in ones, your own, and any in use.
+function categoryOptions() {
+  const out = [...CATEGORY_ORDER];
+  for (const c of categories()) if (!out.includes(c)) out.push(c);
+  return out;
+}
+
+/** Adds a category of your own. Returns the name as stored, or the existing one it matches. */
+function addCategory(name) {
+  const existing = categoryOptions().find(c => same(c, name));
+  if (existing) return existing;
+  ownCategories().push(name);
+  store.save('recipes');
+  return name;
+}
+
+// What recipes are "good for": every ailment you have written on a recipe, A to Z.
+function ailments() {
+  const seen = [];
+  for (const r of allRecipes()) for (const a of r.goodFor || []) if (!seen.some(x => same(x, a))) seen.push(a);
+  return seen.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+// "common cold,  Sore throat , common Cold" → ['common cold', 'Sore throat'], reusing the
+// spelling of an ailment you already have so the same one is not listed twice.
+function parseAilments(text) {
+  const known = ailments();
+  const out = [];
+  for (const raw of text.split(/[,\n]/)) {
+    const name = raw.trim().replace(/\s+/g, ' ');
+    if (!name || out.some(x => same(x, name))) continue;
+    out.push(known.find(x => same(x, name)) || name);
+  }
+  return out;
 }
 
 // The recipe collection ships locked; this card opens it with the owner's code.
@@ -99,13 +143,15 @@ export function render(root, ctx) {
   function draw() {
     const all = allRecipes();
     const cats = categories();
-    if (cat !== 'all' && cat !== 'saved' && !cats.includes(cat)) cat = 'all';
+    if (cat !== 'all' && cat !== 'saved' && cat !== AILMENTS && !cats.includes(cat)) cat = 'all';
 
     const chip = (id, label) => h('button', {
       class: 'chip' + (cat === id ? ' on' : ''), type: 'button', 'aria-pressed': String(cat === id),
       onclick: () => { cat = id; draw(); },
     }, label);
-    chipsEl.replaceChildren(chip('all', `All ${all.length}`), chip('saved', 'Saved'), ...cats.map(c => chip(c, c)));
+    chipsEl.replaceChildren(chip('all', `All ${all.length}`), chip('saved', 'Saved'), chip(AILMENTS, 'Ailments'),
+      ...cats.map(c => chip(c, c)),
+      h('button', { class: 'chip add', type: 'button', onclick: () => manageCategories(ctx) }, icon('plus', 14), 'Category'));
     chipsEl.hidden = !all.length;
     searchIn.hidden = !all.length;
 
@@ -115,11 +161,14 @@ export function render(root, ctx) {
     }
 
     const ql = q.toLowerCase();
-    const shown = all.filter(r =>
-      (cat === 'all' || (cat === 'saved' ? isSaved(r) : r.category === cat)) &&
-      (!ql || r.title.toLowerCase().includes(ql) || (r.ingredients || []).some(i => i.toLowerCase().includes(ql))));
+    // A search looks at the name, the ingredients and what the recipe is good for.
+    const matchesText = r => !ql || r.title.toLowerCase().includes(ql) ||
+      (r.ingredients || []).some(i => i.toLowerCase().includes(ql));
+    const matches = r => matchesText(r) || (r.goodFor || []).some(a => a.toLowerCase().includes(ql));
+    const shown = cat === AILMENTS ? [] : all.filter(r =>
+      (cat === 'all' || (cat === 'saved' ? isSaved(r) : r.category === cat)) && matches(r));
 
-    if (!shown.length) {
+    if (cat !== AILMENTS && !shown.length) {
       listEl.replaceChildren(h('p', { class: 'quiet center' },
         ql ? `Nothing matches “${q}”.` : cat === 'saved' ? 'Tap the heart on a recipe to keep it here.' : 'Nothing here yet.'));
       return;
@@ -134,7 +183,20 @@ export function render(root, ctx) {
     };
 
     const sorted = list => list.slice().sort((a, b) => a.title.localeCompare(b.title));
-    if (cat === 'all' && !ql) {
+    if (cat === AILMENTS) {
+      // One group per ailment, listing the recipes you marked as good for it. A search keeps
+      // an ailment whose own name matches, or the recipes under it whose name or ingredients do.
+      const groups = ailments()
+        .map(a => [a, sorted(all.filter(r => (r.goodFor || []).some(x => same(x, a)) && (a.toLowerCase().includes(ql) || matchesText(r))))])
+        .filter(([, list]) => list.length);
+      listEl.replaceChildren(...(groups.length
+        ? groups.map(([a, list]) => h('section', { class: 'group' },
+          h('h2', { class: 'group-title' }, a, h('span', { class: 'count' }, list.length)),
+          h('div', { class: 'list' }, list.map(r => row(r, true)))))
+        : [h('p', { class: 'quiet center' }, ql
+          ? `Nothing matches “${q}”.`
+          : 'No ailments yet. Open a recipe, tap Edit and fill in “Good for”; it will be listed here.')]));
+    } else if (cat === 'all' && !ql) {
       listEl.replaceChildren(...cats.concat(shown.some(r => !r.category) ? [''] : []).map(c => {
         const inCat = sorted(shown.filter(r => (r.category || '') === c));
         return inCat.length && h('section', { class: 'group' },
@@ -146,6 +208,57 @@ export function render(root, ctx) {
     }
   }
   draw();
+}
+
+// Your own categories: add new ones, or remove ones you added.
+function manageCategories(ctx) {
+  const own = ownCategories();
+  const listEl = h('div');
+  const input = h('input', { type: 'text', id: 'category-new', maxlength: '60', placeholder: 'New category', 'aria-label': 'New category', autocomplete: 'off' });
+  const msg = h('p', { class: 'error', role: 'alert', hidden: true }, 'That category already exists.');
+  const count = c => allRecipes().filter(r => r.category === c).length;
+
+  function draw() {
+    listEl.className = own.length ? 'list' : '';
+    listEl.replaceChildren(...(own.length
+      ? own.map((c, i) => h('div', { class: 'row middle' },
+        h('span', { class: 'row-main' }, h('span', null, c),
+          h('span', { class: 'row-note' }, count(c) === 1 ? '1 recipe' : `${count(c)} recipes`)),
+        confirmBtn([icon('trash', 18)], 'Remove?', () => {
+          own.splice(i, 1);
+          store.save('recipes');
+          draw();
+        }, 'icon-btn danger')))
+      : [h('p', { class: 'quiet' }, 'You have not added any categories of your own yet.')]));
+  }
+
+  function add(e) {
+    e.preventDefault();
+    const name = input.value.trim().replace(/\s+/g, ' ');
+    if (!name) return;
+    if (categoryOptions().some(c => same(c, name))) {
+      msg.hidden = false;
+      return;
+    }
+    msg.hidden = true;
+    addCategory(name);
+    input.value = '';
+    draw();
+    input.focus();
+  }
+
+  draw();
+  sheet({
+    title: 'Categories',
+    content: [
+      h('p', { class: 'quiet' }, 'Add your own categories. They join the built-in ones in the category list when you add or edit a recipe.'),
+      h('form', { class: 'add-row', onsubmit: add }, input, h('button', { class: 'btn primary', type: 'submit' }, 'Add')),
+      msg,
+      listEl,
+      h('p', { class: 'hint' }, 'Removing a category here does not change recipes already filed under it.'),
+    ],
+    onclose: ctx.refresh,
+  });
 }
 
 // A photo that fills itself in once it has been fetched from storage.
@@ -205,6 +318,9 @@ export function openRecipe(id, ctx) {
       photos.length > 0 && h('div', { class: 'photos' + (photos.length === 1 ? ' single' : '') }, photos.map(p => photoEl(p, 'photo'))),
       meta && h('p', { class: 'quiet' }, meta),
       r.yield && h('p', null, r.yield),
+      r.goodFor && r.goodFor.length > 0 && h('section', { class: 'recipe-part' },
+        h('h3', null, 'Good for'),
+        h('div', { class: 'chips' }, r.goodFor.map(a => h('span', { class: 'chip tag' }, a)))),
       r.ingredients && r.ingredients.length > 0 && h('section', { class: 'recipe-part' },
         h('h3', null, 'Ingredients'),
         h('ul', { class: 'ingredients' }, r.ingredients.map(i => h('li', null, i)))),
@@ -225,11 +341,42 @@ export function openRecipe(id, ctx) {
 
 function editRecipe(r, ctx) {
   const title = h('input', { type: 'text', id: 'recipe-title', maxlength: '120', value: r ? r.title : '' });
-  const category = h('input', { type: 'text', id: 'recipe-category', maxlength: '60', list: 'recipe-cats', placeholder: 'e.g. Red meat', value: r ? r.category || '' : '' });
+  // Category: a real drop-down, so every option shows whatever is already chosen. The last
+  // option lets you name a new one. A new recipe starts in the category you were looking at.
+  const NEW = '@new';
+  const options = categoryOptions();
+  const current = r ? r.category || '' : (options.includes(cat) ? cat : '');
+  const categoryNew = h('input', { type: 'text', id: 'recipe-category-new', maxlength: '60', placeholder: 'Name the new category', 'aria-label': 'New category name', hidden: true });
+  const category = h('select', {
+    id: 'recipe-category', value: current,
+    onchange: () => {
+      categoryNew.hidden = category.value !== NEW;
+      if (!categoryNew.hidden) categoryNew.focus();
+    },
+  },
+  h('option', { value: '' }, 'No category'),
+  options.map(c => h('option', { value: c }, c)),
+  h('option', { value: NEW }, 'New category…'));
+
+  // Good for: ailments, separated by commas. Ones you have used before are offered as chips.
+  const goodFor = h('input', { type: 'text', id: 'recipe-goodfor', maxlength: '300', placeholder: 'e.g. common cold, sore throat', autocomplete: 'off', value: r ? (r.goodFor || []).join(', ') : '' });
+  const ailmentChips = h('div', { class: 'chips' });
+  function drawAilmentChips() {
+    const have = parseAilments(goodFor.value);
+    const others = ailments().filter(a => !have.some(x => same(x, a)));
+    ailmentChips.replaceChildren(...others.map(a => h('button', {
+      class: 'chip', type: 'button', 'aria-label': `Add ${a}`,
+      onclick: () => { goodFor.value = [...parseAilments(goodFor.value), a].join(', '); drawAilmentChips(); },
+    }, icon('plus', 14), a)));
+    ailmentChips.hidden = !others.length;
+  }
+  goodFor.addEventListener('input', drawAilmentChips);
+  drawAilmentChips();
   const ingredients = h('textarea', { id: 'recipe-ingredients', rows: '6', placeholder: 'One per line', value: r ? (r.ingredients || []).join('\n') : '' });
   const method = h('textarea', { id: 'recipe-method', rows: '6', placeholder: 'One step per line', value: r ? (r.method || []).join('\n') : '' });
   const notes = h('textarea', { id: 'recipe-notes', rows: '3', value: r ? r.notes || '' : '' });
   const error = h('p', { class: 'error', role: 'alert', hidden: true }, 'Give the recipe a name.');
+  const categoryError = h('p', { class: 'error', role: 'alert', hidden: true }, 'Name the new category, or pick another one.');
   const saveBtn = h('button', { class: 'btn primary', type: 'button', onclick: save }, 'Save');
 
   // Photos: {id, url} for ones already stored, {url} for ones picked just now.
@@ -274,6 +421,12 @@ function editRecipe(r, ctx) {
       title.focus();
       return;
     }
+    const newName = categoryNew.value.trim().replace(/\s+/g, ' ');
+    if (category.value === NEW && !newName) {
+      categoryError.hidden = false;
+      categoryNew.focus();
+      return;
+    }
     saveBtn.disabled = true;
     const ids = [];
     try {
@@ -292,7 +445,8 @@ function editRecipe(r, ctx) {
     }
     const fields = {
       title: t,
-      category: category.value.trim(),
+      category: category.value === NEW ? addCategory(newName) : category.value,
+      goodFor: parseAilments(goodFor.value),
       ingredients: lines(ingredients.value),
       method: lines(method.value),
       notes: notes.value.trim(),
@@ -315,8 +469,9 @@ function editRecipe(r, ctx) {
     title: r ? 'Edit recipe' : 'Add recipe',
     content: [
       field('Name', title), error,
-      field('Category', category),
-      h('datalist', { id: 'recipe-cats' }, categories().map(c => h('option', { value: c }))),
+      field('Category', category), categoryNew, categoryError,
+      field('Good for', goodFor, 'Ailments this helps with, separated by commas. They are listed under Ailments on the Recipes screen.'),
+      ailmentChips,
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Photos'), thumbs, fileIn, photoMsg),
       field('Ingredients', ingredients),
       field('Method', method),

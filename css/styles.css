@@ -175,6 +175,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .chip:hover { border-color: var(--line); }
 .chip.on { background: var(--yolk); color: var(--on-yolk); font-weight: 500; }
 .chip.add { background: none; border: 1px dashed var(--ink-3); justify-self: start; }
+.chip.tag { cursor: default; }
+.chip.tag:hover { border-color: transparent; }
 .segs { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--sunk); }
 .seg { min-width: 44px; min-height: 34px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font-weight: 500; cursor: pointer; }
 .seg.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
