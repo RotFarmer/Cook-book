@@ -245,6 +245,22 @@ input.grams[type="number"] { flex: none; width: 84px; min-height: 40px; padding:
 .thumb.add { display: grid; place-items: center; align-content: center; gap: 4px; border: 1px dashed var(--ink-3); background: none; color: var(--ink-2); font-size: 12px; cursor: pointer; }
 .thumb-x { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
 .row-mark.quiet-mark { color: var(--ink-3); }
+.row-mark.tried-mark { color: var(--leaf); }
+.row-mark.tried-mark .ic { fill: none; }
+/* A recipe row: the row itself opens the recipe, the heart at its end toggles favorite. */
+.row.recipe { padding: 0; align-items: stretch; gap: 0; }
+.row-open { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 12px; padding: 14px 4px 14px 16px; border: 0; background: none; text-align: left; cursor: pointer; }
+.row-open:hover { background: var(--sunk); }
+.row-open:focus-visible { outline-offset: -3px; border-radius: var(--r-l); }
+.fav { flex: none; display: grid; place-items: center; width: 52px; border: 0; background: none; color: var(--ink-3); cursor: pointer; }
+.fav:hover { background: var(--sunk); }
+.fav:focus-visible { outline-offset: -3px; border-radius: var(--r-l); }
+.fav.on { color: var(--berry); }
+.fav.on .ic, .fav-btn.on .ic { fill: currentColor; }
+.fav-btn.on .ic { color: var(--berry); }
+.tried { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--surface); text-align: left; font-weight: 500; cursor: pointer; }
+.tried.on .egg { border-color: var(--yolk); --fill: 1; }
+.tried.on .egg::before { border-color: transparent; }
 .row-mark.quiet-mark .ic { fill: none; }
 
 /* ---------- lists ---------- */

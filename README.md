@@ -3,8 +3,8 @@
 A small personal app for a raw primal diet. Five sections:
 
 - **Recipes** – a categorized, searchable recipe collection. Add your own, edit or delete any
-  recipe, attach photos, and mark favourites. Add your own categories, and note what a recipe
-  is good for; those ailments get their own view.
+  recipe, attach photos, mark favorites, and tick the ones you have tried. Add your own
+  categories, and note what a recipe is good for; those ailments get their own view.
 - **Plan** – your daily meal plan as free-text blocks, one per meal. Tick a block when it is
   eaten; the ticks clear each new day and the text stays until you edit it.
 - **Food** – a log of what you ate and when, with an optional amount (grams, or a count for eggs). Foods are picked from a list

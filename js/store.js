@@ -26,7 +26,8 @@ const DEFAULTS = {
     list: [{ id: 'sunlight', name: 'Get sunlight', emoji: '☀️' }, { id: 'walk', name: 'Walk', emoji: '🚶' }],
     done: {}, // {'YYYY-MM-DD': [habitId]}
   }),
-  recipes: () => ({ mine: [], saved: [], categories: [] }), // categories: ones you added yourself
+  // saved: favourites; tried: recipes ticked as tried; categories: ones you added yourself
+  recipes: () => ({ mine: [], saved: [], tried: [], categories: [] }),
   lists: () => ({ todo: [], buy: [] }), // [{id, text, done}]
   notes: () => ({ items: [] }), // [{id, title, text, updated}]
 };

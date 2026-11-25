@@ -26,7 +26,11 @@ function locate(id) {
   return store.findLibraryRecipe(id);
 }
 
-const isSaved = r => store.data.recipes.saved.includes(r.id);
+const isSaved = r => store.data.recipes.saved.includes(r.id); // a favourite
+const triedIds = () => (store.data.recipes.tried ||= []);
+const isTried = r => triedIds().includes(r.id);
+const TRIED = '@tried'; // views of the recipes you have, and have not yet, tried
+const UNTRIED = '@untried';
 const lines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
 
 const CATEGORY_ORDER = [
@@ -143,13 +147,14 @@ export function render(root, ctx) {
   function draw() {
     const all = allRecipes();
     const cats = categories();
-    if (cat !== 'all' && cat !== 'saved' && cat !== AILMENTS && !cats.includes(cat)) cat = 'all';
+    if (!['all', 'saved', TRIED, UNTRIED, AILMENTS].includes(cat) && !cats.includes(cat)) cat = 'all';
 
     const chip = (id, label) => h('button', {
       class: 'chip' + (cat === id ? ' on' : ''), type: 'button', 'aria-pressed': String(cat === id),
       onclick: () => { cat = id; draw(); },
     }, label);
-    chipsEl.replaceChildren(chip('all', `All ${all.length}`), chip('saved', 'Saved'), chip(AILMENTS, 'Ailments'),
+    chipsEl.replaceChildren(chip('all', `All ${all.length}`), chip('saved', 'Favorites'), chip(TRIED, 'Tried'), chip(UNTRIED, 'To try'),
+      chip(AILMENTS, 'Ailments'),
       ...cats.map(c => chip(c, c)),
       h('button', { class: 'chip add', type: 'button', onclick: () => manageCategories(ctx) }, icon('plus', 14), 'Category'));
     chipsEl.hidden = !all.length;
@@ -165,21 +170,44 @@ export function render(root, ctx) {
     const matchesText = r => !ql || r.title.toLowerCase().includes(ql) ||
       (r.ingredients || []).some(i => i.toLowerCase().includes(ql));
     const matches = r => matchesText(r) || (r.goodFor || []).some(a => a.toLowerCase().includes(ql));
-    const shown = cat === AILMENTS ? [] : all.filter(r =>
-      (cat === 'all' || (cat === 'saved' ? isSaved(r) : r.category === cat)) && matches(r));
+    const inView = r => cat === 'all' ? true
+      : cat === 'saved' ? isSaved(r)
+        : cat === TRIED ? isTried(r)
+          : cat === UNTRIED ? !isTried(r)
+            : r.category === cat;
+    const shown = cat === AILMENTS ? [] : all.filter(r => inView(r) && matches(r));
 
     if (cat !== AILMENTS && !shown.length) {
-      listEl.replaceChildren(h('p', { class: 'quiet center' },
-        ql ? `Nothing matches “${q}”.` : cat === 'saved' ? 'Tap the heart on a recipe to keep it here.' : 'Nothing here yet.'));
+      const none = {
+        saved: 'No favorites yet. Tap the heart next to a recipe to add it.',
+        [TRIED]: 'Nothing ticked as tried yet. Open a recipe and tick “Tried it”.',
+        [UNTRIED]: 'You have tried every recipe.',
+      };
+      listEl.replaceChildren(h('p', { class: 'quiet center' }, ql ? `Nothing matches “${q}”.` : none[cat] || 'Nothing here yet.'));
       return;
     }
 
+    // A row opens the recipe; the heart at its end adds it to, or takes it out of, favorites.
     const row = (r, showCat) => {
       const sub = [showCat && r.category, r._key === 'recipes' && 'My recipe'].filter(Boolean).join(' · ');
-      return h('button', { class: 'row', type: 'button', onclick: () => openRecipe(r.id, ctx) },
-        h('span', { class: 'row-main' }, h('span', null, r.title), sub && h('span', { class: 'row-note' }, sub)),
-        r.photos && r.photos.length > 0 && h('span', { class: 'row-mark quiet-mark', 'aria-label': 'Has photos' }, icon('image', 18)),
-        isSaved(r) && h('span', { class: 'row-mark', 'aria-label': 'Saved' }, icon('heart', 18)));
+      const fav = isSaved(r);
+      return h('div', { class: 'row recipe' },
+        h('button', { class: 'row-open', type: 'button', onclick: () => openRecipe(r.id, ctx) },
+          h('span', { class: 'row-main' }, h('span', null, r.title), sub && h('span', { class: 'row-note' }, sub)),
+          r.photos && r.photos.length > 0 && h('span', { class: 'row-mark quiet-mark', 'aria-label': 'Has photos' }, icon('image', 18)),
+          isTried(r) && h('span', { class: 'row-mark tried-mark', 'aria-label': 'Tried' }, icon('check', 18))),
+        h('button', {
+          class: 'fav' + (fav ? ' on' : ''), type: 'button', 'aria-pressed': String(fav),
+          'aria-label': fav ? `Remove ${r.title} from favorites` : `Add ${r.title} to favorites`,
+          onclick: () => {
+            const saved = store.data.recipes.saved;
+            const i = saved.indexOf(r.id);
+            if (i >= 0) saved.splice(i, 1);
+            else saved.push(r.id);
+            store.save('recipes');
+            draw();
+          },
+        }, icon('heart', 20)));
     };
 
     const sorted = list => list.slice().sort((a, b) => a.title.localeCompare(b.title));
@@ -204,7 +232,7 @@ export function render(root, ctx) {
           h('div', { class: 'list' }, inCat.map(r => row(r, false))));
       }).filter(Boolean));
     } else {
-      listEl.replaceChildren(h('div', { class: 'list' }, sorted(shown).map(r => row(r, cat === 'saved' || !!ql))));
+      listEl.replaceChildren(h('div', { class: 'list' }, sorted(shown).map(r => row(r, !cats.includes(cat) || !!ql))));
     }
   }
   draw();
@@ -274,12 +302,12 @@ export function openRecipe(id, ctx) {
   const r = findRecipe(id);
   if (!r) return;
   const saved = store.data.recipes.saved;
-  const heart = h('button', { class: 'btn', type: 'button', onclick: toggleSaved });
+  const heart = h('button', { class: 'btn fav-btn', type: 'button', onclick: toggleSaved });
   function drawHeart() {
     const on = saved.includes(r.id);
     heart.classList.toggle('on', on);
     heart.setAttribute('aria-pressed', String(on));
-    heart.replaceChildren(icon('heart', 18), on ? 'Saved' : 'Save');
+    heart.replaceChildren(icon('heart', 18), on ? 'Favorited' : 'Favorite');
   }
   function toggleSaved() {
     const i = saved.indexOf(r.id);
@@ -290,6 +318,27 @@ export function openRecipe(id, ctx) {
   }
   drawHeart();
 
+  // "Tried it": a tick you set once you have made the recipe.
+  const tried = triedIds();
+  const triedLabel = h('span');
+  const triedBtn = h('button', {
+    class: 'tried', type: 'button', role: 'checkbox',
+    onclick: () => {
+      const i = tried.indexOf(r.id);
+      if (i >= 0) tried.splice(i, 1);
+      else tried.push(r.id);
+      store.save('recipes');
+      drawTried();
+    },
+  }, h('span', { class: 'egg' }), triedLabel);
+  function drawTried() {
+    const on = tried.includes(r.id);
+    triedBtn.classList.toggle('on', on);
+    triedBtn.setAttribute('aria-checked', String(on));
+    triedLabel.textContent = on ? 'Tried it' : 'Not tried yet';
+  }
+  drawTried();
+
   function remove() {
     const loc = locate(r.id);
     if (!loc) return;
@@ -297,6 +346,7 @@ export function openRecipe(id, ctx) {
     store.save(loc.key);
     const d = store.data.recipes;
     d.saved = d.saved.filter(x => x !== r.id);
+    d.tried = triedIds().filter(x => x !== r.id);
     store.save('recipes');
     if (loc.key !== 'recipes') {
       store.data.settings.unlocked = true; // an emptied collection should not ask for the code again
@@ -308,15 +358,60 @@ export function openRecipe(id, ctx) {
   }
 
   const editable = !!r._key;
-  const photos = r.photos || [];
+
+  // Photos, with a button to add one straight from here (Edit can also remove them).
+  const photosEl = h('div', { class: 'stack tight' });
+  const photoMsg = h('p', { class: 'hint', role: 'status' });
+  const photoIn = h('input', {
+    type: 'file', id: 'detail-photo', accept: 'image/*', hidden: true,
+    onchange: async e => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      photoMsg.textContent = 'Adding the photo…';
+      let url;
+      try {
+        url = await fileToPhoto(file);
+      } catch {
+        photoMsg.textContent = 'That file is not a photo this app can read.';
+        return;
+      }
+      const loc = locate(r.id);
+      if (!loc) return;
+      const photoId = uid();
+      try {
+        await store.photoPut(photoId, url);
+      } catch {
+        photoMsg.textContent = 'The photo could not be saved. Check your connection or free up space, then try again.';
+        return;
+      }
+      const stored = loc.items[loc.index];
+      stored.photos = [...(stored.photos || []), photoId];
+      store.save(loc.key);
+      r.photos = stored.photos;
+      photoMsg.textContent = '';
+      drawPhotos();
+    },
+  });
+  function drawPhotos() {
+    const list = r.photos || [];
+    photosEl.replaceChildren(...[
+      list.length > 0 && h('div', { class: 'photos' + (list.length === 1 ? ' single' : '') }, list.map(p => photoEl(p, 'photo'))),
+      editable && list.length < MAX_PHOTOS && h('div', { class: 'btn-row' },
+        h('button', { class: 'btn small', type: 'button', onclick: () => photoIn.click() }, icon('image', 18), list.length ? 'Add another photo' : 'Add a photo')),
+    ].filter(Boolean));
+  }
+  drawPhotos();
+
   const meta = [r.category, r.source && (r.page ? `${r.source}, PDF page ${r.page}` : r.source), r._key === 'recipes' && 'My recipe']
     .filter(Boolean).join(' · ');
   const method = r.method || [];
   const s = sheet({
     title: r.title,
     content: [
-      photos.length > 0 && h('div', { class: 'photos' + (photos.length === 1 ? ' single' : '') }, photos.map(p => photoEl(p, 'photo'))),
+      photosEl, photoIn, photoMsg,
       meta && h('p', { class: 'quiet' }, meta),
+      triedBtn,
       r.yield && h('p', null, r.yield),
       r.goodFor && r.goodFor.length > 0 && h('section', { class: 'recipe-part' },
         h('h3', null, 'Good for'),
