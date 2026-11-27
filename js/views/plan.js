@@ -1,5 +1,6 @@
-// Meal plan: a few blocks of your own text, one per meal. Tick a block when you have eaten it.
-// The ticks start fresh every day; the text stays until you edit it.
+// Meal plan: a few blocks of your own text, one per meal. Tick a block when you have eaten it
+// and it slides to the bottom, so the next meal moves up to the top. The ticks start fresh every
+// day, which puts the blocks back in their usual order; the text stays until you edit it.
 
 import { store } from '../store.js';
 import { h, icon, sheet, field, empty, confirmBtn, today, monthDay, fmtTime, uid } from '../util.js';
@@ -17,11 +18,23 @@ function migrate(plan) {
   store.save('plan');
 }
 
-// Today's ticks; anything ticked on an earlier day no longer counts.
+// Today's ticks, in the order they were made; anything ticked on an earlier day no longer counts.
 function ticks(plan) {
   if (!plan.checked || plan.checked.date !== today()) plan.checked = { date: today(), ids: [] };
   return plan.checked.ids;
 }
+
+// The order blocks are shown in: those still to eat in your usual order, then the finished ones
+// in the order you ticked them, so the one finished last is at the very bottom.
+function shownOrder(plan) {
+  const ids = ticks(plan);
+  const open = plan.blocks.filter(b => !ids.includes(b.id));
+  const finished = ids.map(id => plan.blocks.find(b => b.id === id)).filter(Boolean);
+  return [...open, ...finished];
+}
+
+const MOVE_DELAY = 350; // long enough to see the tick fill in before the block moves
+const MOVE_TIME = 320;
 
 export function render(root, ctx) {
   const plan = store.data.plan;
@@ -35,7 +48,7 @@ export function render(root, ctx) {
 
   if (!blocks.length) {
     root.append(empty('No meal plan yet',
-      'Add a block for each meal and write what you plan to eat. Tick the blocks off through the day; they clear again tomorrow.'));
+      'Add a block for each meal and write what you plan to eat. Tick a block once you have eaten it and it moves to the bottom; the ticks clear again tomorrow.'));
     return;
   }
 
@@ -45,10 +58,39 @@ export function render(root, ctx) {
     summary.textContent = `Today, ${monthDay(today())} · ${n === blocks.length ? 'all done' : `${n} of ${blocks.length} done`}`;
   };
 
-  root.append(summary, ...blocks.map((b, i) => {
+  // Puts the cards in the order they should be shown, sliding each from where it was to where
+  // it goes, unless the device asks for reduced motion.
+  const list = h('div', { class: 'blocks' });
+  const cards = new Map();
+  let moveTimer = 0;
+  function arrange() {
+    if (!list.isConnected) return; // the screen was redrawn or left meanwhile
+    const want = shownOrder(plan).map(b => cards.get(b.id)).filter(Boolean);
+    if (want.every((c, i) => list.children[i] === c)) return;
+    const from = new Map(want.map(c => [c, c.getBoundingClientRect().top])); // includes any slide still running
+    const focused = document.activeElement;
+    list.append(...want);
+    if (focused && list.contains(focused) && document.activeElement !== focused) focused.focus({ preventScroll: true });
+    let still = false;
+    try {
+      still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch { /* treat as motion allowed */ }
+    if (still || typeof Element.prototype.animate !== 'function') return;
+    for (const c of want) {
+      for (const a of c.getAnimations()) a.cancel();
+      const dy = from.get(c) - c.getBoundingClientRect().top;
+      if (Math.abs(dy) < 1) continue;
+      c.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: MOVE_TIME, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    }
+  }
+
+  root.append(summary, list);
+  list.append(...shownOrder(plan).map(b => {
     const on = done.includes(b.id);
-    const name = b.title || `Meal ${i + 1}`;
+    // An untitled block is named by its place in your usual order, which ticking does not change.
+    const name = b.title || `Meal ${blocks.indexOf(b) + 1}`;
     const card = h('section', { class: 'block' + (on ? ' on' : '') });
+    cards.set(b.id, card);
     const tick = h('button', {
       class: 'block-tick', type: 'button', role: 'checkbox', 'aria-checked': String(on), 'aria-label': `${name} eaten`,
       onclick: () => {
@@ -60,6 +102,9 @@ export function render(root, ctx) {
         card.classList.toggle('on', at < 0);
         tick.setAttribute('aria-checked', String(at < 0));
         drawSummary();
+        // Several quick taps settle into one move once the last one has had time to show.
+        clearTimeout(moveTimer);
+        moveTimer = setTimeout(arrange, MOVE_DELAY);
       },
     }, h('span', { class: 'egg' }));
     card.append(
