@@ -1,7 +1,7 @@
 // Primal — boot, tabs and settings.
 
 import { store } from './store.js';
-import { h, icon, sheet, sheetOpen, closeTopSheet, toast, confirmBtn } from './util.js';
+import { h, icon, sheet, sheetOpen, closeTopSheet, toast, confirmBtn, today } from './util.js';
 import * as update from './update.js';
 import * as recipes from './views/recipes.js';
 import * as plan from './views/plan.js';
@@ -79,10 +79,19 @@ let ready = false;
 
 const ctx = { refresh: render, go: show };
 
+let renderedDay = ''; // the date the screen was last drawn on
+
 function render() {
   if (!ready || !current) return;
   main.replaceChildren();
+  renderedDay = today();
   TABS.find(t => t.id === current).view.render(main, ctx);
+}
+
+// A screen left open overnight (the Android app only goes to the background) would still show
+// yesterday: the meal plan's ticks, for one. Redraw when the day has changed since it was drawn.
+function redrawIfNewDay() {
+  if (ready && !document.hidden && renderedDay && renderedDay !== today() && !sheetOpen()) render();
 }
 
 function show(id, { fromHash = false } = {}) {
@@ -336,7 +345,9 @@ document.addEventListener('visibilitychange', async () => {
   store.flush();
   if (document.hidden || !ready) return;
   if (await store.refresh(() => !sheetOpen())) render();
+  else redrawIfNewDay();
 });
+window.addEventListener('focus', redrawIfNewDay);
 window.addEventListener('online', () => store.flush());
 window.addEventListener('pagehide', () => store.flush());
 

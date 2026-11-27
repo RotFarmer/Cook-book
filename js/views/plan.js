@@ -1,6 +1,6 @@
 // Meal plan: a few blocks of your own text, one per meal. Tick a block when you have eaten it
-// and it slides to the bottom, so the next meal moves up to the top. The ticks start fresh every
-// day, which puts the blocks back in their usual order; the text stays until you edit it.
+// and it slides to the bottom, and the next block moves up into its place. The ticks start fresh
+// every day, which puts the blocks back in their usual order; the text stays until you edit it.
 
 import { store } from '../store.js';
 import { h, icon, sheet, field, empty, confirmBtn, today, monthDay, fmtTime, uid } from '../util.js';
@@ -68,9 +68,24 @@ export function render(root, ctx) {
     const want = shownOrder(plan).map(b => cards.get(b.id)).filter(Boolean);
     if (want.every((c, i) => list.children[i] === c)) return;
     const from = new Map(want.map(c => [c, c.getBoundingClientRect().top])); // includes any slide still running
-    const focused = document.activeElement;
-    list.append(...want);
-    if (focused && list.contains(focused) && document.activeElement !== focused) focused.focus({ preventScroll: true });
+    const focused = list.contains(document.activeElement) ? document.activeElement : null;
+    const card = focused && focused.closest('.block');
+    const slot = card ? [...list.children].indexOf(card) : -1;
+    let keyboard = false;
+    try {
+      keyboard = !!focused && focused.matches(':focus-visible');
+    } catch { /* older browsers: treat as touch */ }
+    list.append(...want); // moving the cards drops focus, so put it back below
+    if (focused) {
+      const next = list.children[slot];
+      if (keyboard && card.classList.contains('on') && next && next !== card) {
+        // Ticked from the keyboard: land on the next meal, which has moved into this place.
+        next.querySelector('.block-tick').focus({ preventScroll: true });
+      } else {
+        focused.focus({ preventScroll: true });
+        if (keyboard) focused.scrollIntoView({ block: 'nearest' }); // unticked: keep it in view where it went
+      }
+    }
     let still = false;
     try {
       still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -99,6 +114,9 @@ export function render(root, ctx) {
         if (at >= 0) ids.splice(at, 1);
         else ids.push(b.id);
         store.save('plan');
+        // The screen was drawn on an earlier day, so the other cards still show yesterday's ticks:
+        // redraw everything from today's.
+        if (ids !== done) return ctx.refresh();
         card.classList.toggle('on', at < 0);
         tick.setAttribute('aria-checked', String(at < 0));
         drawSummary();
@@ -137,29 +155,42 @@ function edit(block, ctx) {
     store.save('plan');
     s.close();
   }
-  function move(by) {
+  // Move up / Move down step past finished blocks, which sit at the bottom until tomorrow, so a
+  // move always shows on screen. The block is lifted out and put back beside its neighbour, so
+  // finished blocks keep their usual places for tomorrow.
+  const finishedToday = b => ticks(plan).includes(b.id);
+  const neighbour = by => {
     const i = plan.blocks.indexOf(block);
-    const j = i + by;
-    if (j < 0 || j >= plan.blocks.length) return;
-    [plan.blocks[i], plan.blocks[j]] = [plan.blocks[j], plan.blocks[i]];
+    for (let j = i + by; j >= 0 && j < plan.blocks.length; j += by) {
+      if (!finishedToday(plan.blocks[j])) return plan.blocks[j];
+    }
+    return null;
+  };
+  function move(by) {
+    const other = neighbour(by);
+    if (!other) return;
+    plan.blocks.splice(plan.blocks.indexOf(block), 1);
+    plan.blocks.splice(plan.blocks.indexOf(other) + (by > 0 ? 1 : 0), 0, block);
     store.save('plan');
     drawMoves();
   }
   const moves = h('div', { class: 'btn-row' });
   function drawMoves() {
-    const i = plan.blocks.indexOf(block);
     moves.replaceChildren(
-      h('button', { class: 'btn small', type: 'button', disabled: i === 0, onclick: () => move(-1) }, icon('up', 18), 'Move up'),
-      h('button', { class: 'btn small', type: 'button', disabled: i === plan.blocks.length - 1, onclick: () => move(1) }, icon('down', 18), 'Move down'));
+      h('button', { class: 'btn small', type: 'button', disabled: !neighbour(-1), onclick: () => move(-1) }, icon('up', 18), 'Move up'),
+      h('button', { class: 'btn small', type: 'button', disabled: !neighbour(1), onclick: () => move(1) }, icon('down', 18), 'Move down'));
   }
-  if (block) drawMoves();
+  const finished = block && finishedToday(block);
+  const canMove = block && !finished && (neighbour(-1) || neighbour(1));
+  if (canMove) drawMoves();
 
   const s = sheet({
     title: block ? 'Edit block' : 'Add block',
     content: [
       field('Name', title, 'Optional.'),
       field('Plan', text),
-      block && plan.blocks.length > 1 && moves,
+      canMove && moves,
+      finished && plan.blocks.length > 1 && h('p', { class: 'hint' }, 'Finished today, so it stays at the bottom until tomorrow. Untick it to move it.'),
     ],
     footer: [block && confirmBtn('Delete', 'Tap again to delete', remove), h('span', { class: 'grow' }),
       h('button', { class: 'btn primary', type: 'button', onclick: save }, 'Save')],
